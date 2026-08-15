@@ -1,0 +1,8 @@
+artifacts/
+.run-id
+range.env
+*.log
+*.key
+*.pem
+attestation/*.key
+demo/*.cast

@@ -1,0 +1,19 @@
+# /etc/systemd/system/range-killswitch.service
+# Docker recreates the DOCKER-USER chain on daemon restart and drops our jump.
+# Without this unit the killswitch silently disarms itself.
+[Unit]
+Description=Re-arm agent range killswitch after docker restart
+After=docker.service
+BindsTo=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=RANGE_CIDR=10.66.0.0/16
+Environment=KILL_CHAIN=RANGE-KILL
+Environment=RANGE_KILL_MARKER=/var/lib/range-lab/killswitch.armed
+ExecStart=/usr/local/bin/range-killswitch-arm.sh
+
+[Install]
+WantedBy=docker.service

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://range-lab.local/schemas/probe.v1.json",
+  "title": "Range containment probe artefact, version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "ts", "range_cidr", "range_net",
+    "egress_blocked", "tripwire_sinkholed", "sigma_loaded",
+    "canaries_present", "sim_ca_present", "checks"
+  ],
+  "properties": {
+    "schema":             { "const": 1 },
+    "ts":                 { "type": "string", "format": "date-time" },
+    "range_cidr":         { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+\\.\\d+/\\d+$" },
+    "range_net":          { "type": "string", "minLength": 1 },
+    "egress_blocked":     { "type": "boolean" },
+    "tripwire_sinkholed": { "type": "boolean" },
+    "sigma_loaded":       { "type": "boolean" },
+    "canaries_present":   { "type": "boolean" },
+    "sim_ca_present":     { "type": "boolean" },
+    "checks": {
+      "type": "array",
+      "minItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "ok", "method", "detail"],
+        "properties": {
+          "id":     { "enum": ["egress", "tripwire", "sigma", "canaries", "sim_ca"] },
+          "ok":     { "type": "boolean" },
+          "method": { "type": "string", "minLength": 3 },
+          "detail": { "type": "string" }
+        }
+      }
+    }
+  }
+}
