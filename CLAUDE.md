@@ -7,3 +7,4 @@ Exception: CI-blocking failures only.
 
 ## Backlog
 - restore-canaries recipe — быстрый reset canary-состояния, непроверено, after rc
+- range-dns healthcheck checks A record via bare nslookup, but dnsmasq only answers AAAA (::) — false unhealthy, fix healthcheck test string, after rc
