@@ -7,7 +7,7 @@ where most of the runtime is. Re-measure if hardware/compose changes.
 | s | Frame | Command |
 |---|---|---|
 | 0–5 | Title + 10.66.0.0/16 | — |
-| 5–42 | Range up, probe green | `just range-up && just probe` |
+| 5–42 | Range up, probe green | `just range-up` |
 | 42–48 | **Break live**, probe red | `just break-canaries && just probe` |
 | 48–96 | Fixed, green again | `just range-down && just range-up` |
 | 96–98 | Agent reaches out, tripwire logs | `docker exec agent-runner curl -s --max-time 3 https://canary.tripwire-range.invalid` |
