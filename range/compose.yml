@@ -31,6 +31,10 @@ services:
       agentlab0:
         ipv4_address: 10.66.0.53
     cap_add: [NET_ADMIN]
+    logging:
+      driver: journald
+      options:
+        tag: "dnsmasq"      # ровно это значение — на нём завязан decoder
     healthcheck:
       test: ["CMD", "nslookup", "canary.tripwire-range.invalid", "127.0.0.1"]
       interval: 5s
@@ -53,6 +57,10 @@ services:
     networks: [agentlab0]
     dns: [10.66.0.53]                     # CONTAINMENT
     security_opt: ["no-new-privileges:true"]
+    logging:
+      driver: journald
+      options:
+        tag: "range-idp"    # ровно это значение — на нём завязан decoder
     healthcheck:
       test: ["CMD", "getent", "passwd", "ctf-canary"]
       interval: 5s
