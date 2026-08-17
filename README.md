@@ -5,7 +5,7 @@ Containment is asserted by machine-checkable evidence, not by prompt text.
 
 **A prompt is not a security control.**
 
-<!-- GIF: demo/containment.gif -->
+[containment demo](demo/containment-demo-final.mp4)
 
 | Control | Verified by |
 |---|---|
@@ -19,4 +19,4 @@ Containment is asserted by machine-checkable evidence, not by prompt text.
 ./bootstrap.sh && just ready     # -> READY TO RECORD
 ```
 
-Containment time: see `artifacts/<run>/containment.json`. Target < 60 s.
+Containment time: **19.65s** (verdict: PASS, threshold 60s)
