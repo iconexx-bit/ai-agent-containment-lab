@@ -11,7 +11,7 @@ Containment is asserted by machine-checkable evidence, not by prompt text.
 |---|---|
 | Egress blocked | curl from inside the range, by IP and by name |
 | Tripwire sinkholed | resolution inside the range, not on the host |
-| Sigma rules loaded | Wazuh API, exact count (disk presence is not loading) |
+| Sigma rules loaded | Wazuh API, exact count — **currently 0 rules, check fails — pack not written yet** |
 | Canary accounts | getent per user |
 | Simulation attestation | CA fingerprint — scope confusion becomes checkable |
 
