@@ -1,0 +1,14 @@
+<!--
+  Insert into the HOST agent's ossec.conf (ai-sec-ubuntu, agent installed
+  directly on host — not inside a container), inside <ossec_config>.
+
+  Prerequisite: containers you need visibility into (dnsmasq, range-idp,
+  any range containers with canary accounts) must be configured with:
+    logging:
+      driver: journald
+  in docker-compose.yml — default json-file driver will NOT show up here.
+-->
+<localfile>
+  <log_format>journald</log_format>
+  <location>journald</location>
+</localfile>
