@@ -1,0 +1,6 @@
+{
+  "containment_ms": 19650,
+  "threshold_ms": 60000,
+  "first_attempt_log": "2026-08-17T05:53:54.047527000Z dnsmasq[1]: query[A] canary.tripwire-range.invalid from 10.66.0.3",
+  "verdict": "PASS"
+}
