@@ -34,3 +34,13 @@ to full range teardown — [`docs/containment-verdict.json`](docs/containment-ve
 ```
 
 Reproduce with `just range-up && just probe && just killswitch`.
+
+> **Detection pack not included.** The Sigma rule pack (`100200–100299`) and the
+> journald decoder are not in this repo. The range, killswitch and probe harness
+> run without them — the `sigma` check reports *not configured* rather than
+> passing or failing, because `SIGMA_EXPECTED=0` is not a check. Supply your own
+> rules and set `SIGMA_EXPECTED` to the number you load.
+>
+> The published **19.65s** containment figure does not depend on Wazuh: the timer
+> reads the first out-of-scope DNS query from the `dnsmasq` container log, and
+> teardown is driven by `scripts/range-killswitch-arm.sh` via systemd.

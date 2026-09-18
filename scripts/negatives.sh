@@ -50,7 +50,7 @@ unbreak_sigma() {
   docker exec "$WAZUH_CONTAINER" /var/ossec/bin/wazuh-control restart >/dev/null 2>&1 || true
 }
 
-break_canaries()   { docker exec "$CANARY_CONTAINER" userdel ctf-canary 2>/dev/null; }
+break_canaries()   { docker exec "$CANARY_CONTAINER" userdel ctf-canary; }
 unbreak_canaries() { docker exec "$CANARY_CONTAINER" useradd -M -s /usr/sbin/nologin ctf-canary 2>/dev/null || true; }
 
 break_sim_ca() {
