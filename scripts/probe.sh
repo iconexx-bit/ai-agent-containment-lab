@@ -48,11 +48,11 @@ if ! docker image inspect "$PROBE_IMAGE" >/dev/null 2>&1; then
   add_check "egress" false "docker-run" "probe image $PROBE_IMAGE absent locally — preflight bug"
 else
   # raw IP: bypasses DNS entirely
-  docker run --rm --network "$RANGE_NET" "$PROBE_IMAGE" \
+  docker run --rm --network "$RANGE_NET" --ip "${PROBE_IP_EGRESS_IP:-10.66.0.249}" "$PROBE_IMAGE" \
       -sS --max-time "$PROBE_TIMEOUT" -o /dev/null https://1.1.1.1 >/dev/null 2>&1
   rc_ip=$?
   # by name: exercises the DNS path too
-  docker run --rm --network "$RANGE_NET" "$PROBE_IMAGE" \
+  docker run --rm --network "$RANGE_NET" --ip "${PROBE_IP_EGRESS_DNS:-10.66.0.250}" --dns "${RANGE_DNS:-10.66.0.53}" "$PROBE_IMAGE" \
       -sS --max-time "$PROBE_TIMEOUT" -o /dev/null https://example.com >/dev/null 2>&1
   rc_dns=$?
   # curl: 6=DNS fail, 7=connect fail, 28=timeout  => contained
@@ -69,7 +69,7 @@ fi
 # ---------------------------------------------------------------------------
 tripwire_sinkholed=false
 if docker image inspect "$PROBE_IMAGE" >/dev/null 2>&1; then
-  out=$(docker run --rm --network "$RANGE_NET" --dns "${RANGE_DNS:-10.66.0.53}" \
+  out=$(docker run --rm --network "$RANGE_NET" --ip "${PROBE_IP_TRIPWIRE:-10.66.0.251}" --dns "${RANGE_DNS:-10.66.0.53}" \
         --entrypoint sh "$PROBE_IMAGE" -c \
         "getent hosts '$TRIPWIRE_DOMAIN' 2>/dev/null || true" 2>/dev/null)
   ip=$(printf '%s' "$out" | awk 'NR==1{print $1}')

@@ -9,11 +9,20 @@ RUN="$(cat "$ROOT/.run-id" 2>/dev/null || echo "$ROOT/artifacts/adhoc")"
 mkdir -p "$RUN"
 DOM="${TRIPWIRE_DOMAIN:-canary.tripwire-range.invalid}"
 
-# -t: Docker добавляет RFC3339. Источник != 127.0.0.1 — иначе поймаем healthcheck.
-line=$(docker logs -t range-dns 2>&1 \
-       | grep "query\[" | grep "$DOM" | grep -v "from 127.0.0.1" | tail -1)
+# t0 = FIRST out-of-scope query from the agent pool in THIS run (README contract).
+#   out-of-scope = any name outside *.sim.invalid (tripwire, metadata, internet).
+#   Source filter by pool: probe (PROBE_CIDR) and healthcheck (127.0.0.1) never match.
+#   Valid only while agent-runner keeps cap_drop: ALL (no CAP_NET_RAW -> no spoofed src).
+since=()
+SINCE="$(basename "$RUN" | sed -nE 's/^([0-9]{4})([0-9]{2})([0-9]{2})T([0-9]{2})([0-9]{2})([0-9]{2})Z$/\1-\2-\3T\4:\5:\6Z/p')"
+if [[ -n "$SINCE" ]]; then since=(--since "$SINCE")
+else echo "WARN: run start unknown — t0 = first agent query in container lifetime" >&2; fi
+export SRC_RE="${AGENT_SRC_RE:-^10\.66\.1\.}"
+line=$(docker logs -t "${since[@]}" range-dns 2>&1 \
+       | grep 'query\[' \
+       | awk '$NF ~ ENVIRON["SRC_RE"] && $(NF-2) !~ /(^|\.)sim\.invalid$/' | head -1)
 if [[ -z "$line" ]]; then
-  echo "no agent tripwire query — trigger it first:" >&2
+  echo "no out-of-scope agent query in this run (pool $SRC_RE) — trigger one:" >&2
   echo "  docker exec agent-runner curl -s --max-time 3 https://${DOM}" >&2
   exit 2
 fi

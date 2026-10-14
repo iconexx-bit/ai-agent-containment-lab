@@ -6,3 +6,6 @@ range.env
 *.pem
 attestation/*.key
 demo/*.cast
+
+# detection fixtures are test data, not runtime logs
+!detection/fixtures/*.log

@@ -19,9 +19,9 @@ services:
     command:
       - "--no-resolv"
       - "--no-hosts"
-      - "--address=/tripwire-range.invalid/::"
-      - "--address=/sim.invalid/::"
-      - "--address=/#/::"
+      - "--address=/tripwire-range.invalid/#"
+      - "--address=/sim.invalid/#"
+      - "--address=/#/#"   # NULL sinkhole: A=0.0.0.0 + AAAA=:: answered locally (IPv6-only sent A upstream -> REFUSED storm)
       - "--log-queries"
       - "--log-facility=-"
       
@@ -36,7 +36,7 @@ services:
       options:
         tag: "dnsmasq"      # ровно это значение — на нём завязан decoder
     healthcheck:
-      test: ["CMD", "nslookup", "canary.tripwire-range.invalid", "127.0.0.1"]
+      test: ["CMD", "nslookup", "health.sim.invalid", "127.0.0.1"]  # in-scope name: a tripwire healthcheck pages every 5 s
       interval: 5s
       timeout: 3s
       retries: 5

@@ -20,7 +20,7 @@ echo "run-id: $RUN"
 # --internal: no default route out of this network at all. Belt; the killswitch
 # is the braces.
 docker network inspect "$RANGE_NET" >/dev/null 2>&1 || \
-  docker network create --internal --subnet="$RANGE_CIDR" "$RANGE_NET"
+  docker network create --internal --subnet="$RANGE_CIDR" --ip-range="${RANGE_IP_RANGE:-10.66.1.0/24}" "$RANGE_NET"
 
 docker compose -f "$ROOT/$COMPOSE_FILE" up -d --wait 2>&1 | tee "$RUN/up.log"
 

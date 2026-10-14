@@ -30,7 +30,7 @@ COMPOSE="${COMPOSE_FILE:-range/compose.yml}"
 _net() { # $1 = extra flags
   docker compose -f "$ROOT/$COMPOSE" down >/dev/null 2>&1
   docker network rm "$RANGE_NET" >/dev/null 2>&1
-  docker network create $1 --subnet="${RANGE_CIDR}" "$RANGE_NET" >/dev/null 2>&1
+  docker network create $1 --subnet="${RANGE_CIDR}" --ip-range="${RANGE_IP_RANGE:-10.66.1.0/24}" "$RANGE_NET" >/dev/null 2>&1
   docker compose -f "$ROOT/$COMPOSE" up -d --wait >/dev/null 2>&1
 }
 break_egress()   { _net ""; }            # без --internal: контейнмент снят

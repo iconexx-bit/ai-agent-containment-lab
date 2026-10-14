@@ -23,4 +23,4 @@ Cut/speed this segment in post if 48s of container startup drags; note the
 speed-up on screen if you do.
 
 Terminal: >=16pt. `git config core.pager cat`. range.env never on screen.
-containment_ms=11588 (11.6s) verdict=PASS run=20260815T142841Z
+containment_ms=11588 (11.6s) verdict=PASS run=20260815T142841Z — this recording's run; distribution in README
