@@ -1,0 +1,17 @@
+<!--
+  Range DNS decoder: dnsmasq -> Docker journald driver -> Wazuh journald reader.
+  full_log: "<Mon DD HH:MM:SS> <host> dnsmasq[<dockerd pid>]: dnsmasq[1]: query[A] <name> from <ip>"
+  Header program_name = compose logging tag "dnsmasq"; header PID is dockerd's and changes
+  across reboots (979 -> 938 observed). dnsmasq's own "dnsmasq[1]:" prefix stays in the message.
+  Never depend on either PID. Unknown qtypes are logged as query[type=65] -> [^\]]+, not \w+.
+-->
+<decoder name="range-dnsmasq">
+  <program_name>^dnsmasq$</program_name>
+</decoder>
+
+<decoder name="range-dnsmasq-query">
+  <parent>range-dnsmasq</parent>
+  <prematch type="pcre2">^dnsmasq\[\d+\]: query\[</prematch>
+  <regex type="pcre2">^dnsmasq\[\d+\]: query\[([^\]]+)\] (\S+) from (\S+)$</regex>
+  <order>dns.qtype, dns.query, srcip</order>
+</decoder>

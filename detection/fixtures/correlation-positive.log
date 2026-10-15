@@ -1,0 +1,7 @@
+# SYNTHETIC: DISTINCT violations (3 rules, 4 names) from ONE srcip in a fresh session.
+# Must produce 100220. The event index where it fires reveals Wazuh's frequency semantics;
+# line 4 (github.com, 100204 again within its ignore window) shows whether ignored matches count.
+Oct 14 22:47:00 range-host dnsmasq[938]: dnsmasq[1]: query[A] api.openai.com from 10.66.1.30
+Oct 14 22:47:01 range-host dnsmasq[938]: dnsmasq[1]: query[A] canary.tripwire-range.invalid from 10.66.1.30
+Oct 14 22:47:02 range-host dnsmasq[938]: dnsmasq[1]: query[A] metadata.google.internal from 10.66.1.30
+Oct 14 22:47:03 range-host dnsmasq[938]: dnsmasq[1]: query[A] github.com from 10.66.1.30

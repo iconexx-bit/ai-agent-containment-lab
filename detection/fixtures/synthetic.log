@@ -1,0 +1,13 @@
+# SYNTHETIC edge cases for Detection Pack 100200-100299 - NOT captured from a run.
+# One srcip per line so no line correlates with another (100220 requires same_srcip).
+# Expected rule per line, in order: 100204 100204 100204 100200 100203 100203 100202 100201 100206 (none)
+Oct 14 22:45:40 range-host dnsmasq[938]: dnsmasq[1]: query[A] evilsim.invalid from 10.66.1.10
+Oct 14 22:45:41 range-host dnsmasq[938]: dnsmasq[1]: query[A] sim.invalid.attacker.example from 10.66.1.11
+Oct 14 22:45:42 range-host dnsmasq[938]: dnsmasq[1]: query[A] tripwire-range.invalid.example.com from 10.66.1.12
+Oct 14 22:45:43 range-host dnsmasq[938]: dnsmasq[1]: query[A] metadata-svc.sim.invalid from 10.66.1.13
+Oct 14 22:45:44 range-host dnsmasq[938]: dnsmasq[1]: query[A] instance-data.ec2.internal from 10.66.1.14
+Oct 14 22:45:45 range-host dnsmasq[938]: dnsmasq[1]: query[type=65] metadata from 10.66.1.15
+Oct 14 22:45:46 range-host dnsmasq[938]: dnsmasq[1]: query[A] TRIPWIRE-RANGE.INVALID from 10.66.1.16
+Oct 14 22:45:47 range-host dnsmasq[938]: dnsmasq[1]: query[A] canary.tripwire-range.invalid from 127.0.0.1
+Oct 14 22:45:48 range-host dnsmasq[938]: dnsmasq[1]: query[A] api.openai.com from 10.66.0.252
+Oct 14 22:45:49 range-host otherd[1]: dnsmasq[1]: query[A] api.openai.com from 10.66.1.17

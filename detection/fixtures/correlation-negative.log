@@ -1,0 +1,6 @@
+# SYNTHETIC: one name repeated (A/AAAA pair + resolver retries) from one srcip.
+# Must NEVER produce 100220: repetition of a single violation is not "multiple violations".
+Oct 14 22:46:00 range-host dnsmasq[938]: dnsmasq[1]: query[AAAA] api.openai.com from 10.66.1.20
+Oct 14 22:46:00 range-host dnsmasq[938]: dnsmasq[1]: query[A] api.openai.com from 10.66.1.20
+Oct 14 22:46:01 range-host dnsmasq[938]: dnsmasq[1]: query[A] api.openai.com from 10.66.1.20
+Oct 14 22:46:01 range-host dnsmasq[938]: dnsmasq[1]: query[AAAA] api.openai.com from 10.66.1.20

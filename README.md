@@ -34,13 +34,14 @@ Measured by `scripts/containment-timer.sh` from the agent's first out-of-scope D
 
 Reproduce containment with `just range-up && just probe && just killswitch`. To measure TTC, trigger an out-of-scope query from `agent-runner`, then run `scripts/containment-timer.sh` — it arms the killswitch itself (non-persistent; only `just killswitch` sets the re-arm marker).
 
-> **Detection pack not included.** The Sigma rule pack (`100200–100299`) and the
-> journald decoder are not in this repo. The range, killswitch and probe harness
-> run without them — the `sigma` check reports *not configured* rather than
-> passing or failing, because `SIGMA_EXPECTED=0` is not a check. Supply your own
-> rules and set `SIGMA_EXPECTED` to the number you load.
+> **Detection pack v1** (rules `100200–100206`, `100220`; decoder for dnsmasq via journald) lives in
+> `rules/` and `decoders/` and is verified offline by `scripts/logtest.sh`: an ephemeral Wazuh
+> manager (same image and `ossec.conf` as live, no network) replays real and synthetic fixtures
+> against frozen per-line expectations. Live install and end-to-end push are pending.
+> Known blind spot: IP-literal egress leaves no DNS trace and is not detected.
+> Fixture rule: every violation rule has … which rule fired.
 >
 > The published TTC figures do not depend on Wazuh: the timer
 > reads the first out-of-scope DNS query from the `dnsmasq` container log, and
-> the killswitch is armed by `scripts/killswitch.sh` (iptables, no Wazuh); `scripts/range-killswitch-arm.sh`
+> the killswitch is armed by `scripts/killswitch.sh` (iptables, no Wazuh); …
 > only re-arms it via systemd after a Docker restart, and only if the marker is set.
