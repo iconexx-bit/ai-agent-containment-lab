@@ -19,6 +19,8 @@ command -v jq >/dev/null 2>&1 || { echo "jq missing" >&2; exit 2; }
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 fail=0; no() { echo "FAIL: $*"; fail=1; }
 CLEAN=(env -u PROBE_SKIP -u VERDICT_SKIP -u NEG_SKIP)
+# every check red: since D5 P2b negatives credit a break only if checks[<target>].ok == false
+ALLRED='{"schema":1,"checks":[{"id":"egress","ok":false},{"id":"tripwire","ok":false},{"id":"sigma","ok":false},{"id":"canaries","ok":false},{"id":"sim_ca","ok":false}]}'
 
 tree() { # $1 = name, $2 = range.env line(s); prints the tree path
   local d="$T/$1"
@@ -75,7 +77,7 @@ V v8 'VERDICT_SKIP="canaries sigma"' "$T/sigma-red.json"
 # ---- negatives.sh --------------------------------------------------------------------------
 N() { # $1 = name, $2 = range.env, rest = extra env assignments
   local d; d=$(tree "$1" "$2"); shift 2
-  printf '#!/bin/sh\ntouch "%s/probe.ran"\necho "{}"\n' "$d" >"$d/scripts/probe.sh"
+  printf '#!/bin/sh\ntouch "%s/probe.ran"\ncat <<"J"\n%s\nJ\n' "$d" "$ALLRED" >"$d/scripts/probe.sh"
   printf '#!/bin/sh\ncase "$1" in *baseline*|*restored*) exit 0;; *) exit 1;; esac\n' >"$d/scripts/verdict.sh"
   printf '#!/bin/sh\necho "$*" >>"%s/docker.log"\nexit 0\n' "$d" >"$d/bin/docker"
   printf '#!/bin/sh\nexit 0\n' >"$d/bin/sleep"

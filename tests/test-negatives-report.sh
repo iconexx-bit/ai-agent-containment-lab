@@ -18,7 +18,9 @@ cp "$SRC" "$T/scripts/negatives.sh"
 if [[ -d "$ROOT/scripts/lib" ]]; then cp -r "$ROOT/scripts/lib" "$T/scripts/"; fi
 mkdir -p "$T/schemas" && cp "$ROOT/schemas/probe.v1.json" "$T/schemas/"
 echo "PEM" >"$T/attestation/sim-range-ca.crt"
-printf '#!/bin/sh\necho "{}"\n' >"$T/scripts/probe.sh"
+# every check red: since D5 P2b negatives credit a break only if checks[<target>].ok == false
+ALLRED='{"schema":1,"checks":[{"id":"egress","ok":false},{"id":"tripwire","ok":false},{"id":"sigma","ok":false},{"id":"canaries","ok":false},{"id":"sim_ca","ok":false}]}'
+printf '#!/bin/sh\ncat <<"J"\n%s\nJ\n' "$ALLRED" >"$T/scripts/probe.sh"
 # verdict stub: baseline/restored are green, every probe taken after a break is red
 printf '#!/bin/sh\ncase "$1" in *baseline*|*restored*) exit 0;; *) exit 1;; esac\n' >"$T/scripts/verdict.sh"
 printf '#!/bin/sh\nexit 0\n' >"$T/bin/docker"; printf '#!/bin/sh\nexit 0\n' >"$T/bin/sleep"
