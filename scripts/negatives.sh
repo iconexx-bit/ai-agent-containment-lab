@@ -6,7 +6,8 @@
 # probe goes RED. 5/5 or the range is not ready to be recorded.
 #
 #   exit 0 = all negative tests detected
-#   exit 1 = at least one break went undetected (probe is inert)
+#   exit 1 = a break went undetected, was detected only by ANOTHER check (INERT),
+#            or a negative errored (break failed / probe crashed / verdict error)
 #   exit 2 = skip configuration error (scripts/lib/skip.sh): nothing was run
 #   exit 3 = nothing inert, but some controls are UNPROVEN (listed with source)
 set -uo pipefail
@@ -57,15 +58,32 @@ unbreak_tripwire() { docker start range-dns >/dev/null 2>&1; sleep 4; }
 break_canaries()   { docker exec "$CANARY_CONTAINER" userdel ctf-canary; }
 unbreak_canaries() { docker exec "$CANARY_CONTAINER" useradd -M -s /usr/sbin/nologin ctf-canary 2>/dev/null || true; }
 
+SIMCA_BAK=""
 break_sim_ca() {
-  cp "$ROOT/attestation/sim-range-ca.crt" /tmp/simca.bak
+  SIMCA_BAK=$(mktemp "${TMPDIR:-/tmp}/simca.XXXXXX") || return 1
+  cp "$ROOT/attestation/sim-range-ca.crt" "$SIMCA_BAK" || return 1
   echo "NOT A CERTIFICATE" > "$ROOT/attestation/sim-range-ca.crt"
 }
-unbreak_sim_ca() { cp /tmp/simca.bak "$ROOT/attestation/sim-range-ca.crt"; }
+unbreak_sim_ca() {
+  [[ -n $SIMCA_BAK && -f $SIMCA_BAK ]] || { echo "unbreak_sim_ca: no backup to restore" >&2; return 1; }
+  cp "$SIMCA_BAK" "$ROOT/attestation/sim-range-ca.crt" && rm -f "$SIMCA_BAK" && SIMCA_BAK=""
+}
 
-run_probe() { # -> 0 pass, 1 fail
+# A break left active by an interrupted run is undone on exit (TERM/INT included).
+ACTIVE=""
+restore_active() {
+  [[ -n $ACTIVE ]] || return 0
+  local a=$ACTIVE; ACTIVE=""
+  echo "negatives: restoring $a after interruption" >&2
+  "unbreak_$a"
+}
+trap restore_active EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
+
+run_probe() { # -> verdict rc (0 PASS, 1 FAIL, other = verdict error); 90 = probe crashed
   local f="$OUT/probe.$1.json"
-  "$ROOT/scripts/probe.sh" > "$f" 2>"$OUT/probe.$1.stderr" || return 2
+  "$ROOT/scripts/probe.sh" > "$f" 2>"$OUT/probe.$1.stderr" || return 90
   "$ROOT/scripts/verdict.sh" "$f" > "$OUT/verdict.$1.txt" 2>&1
 }
 
@@ -79,19 +97,38 @@ echo "baseline: PASS"
 echo
 
 overall=0
+# A negative counts only if THE TARGET check went red (checks[<t>].ok == false in probe.<t>.json).
+# A red verdict caused by another check, a probe crash or a failed break proves nothing.
 for t in "${TESTS[@]}"; do
   echo "== break: $t =="
-  "break_$t"
-  sleep 2
-  if run_probe "$t"; then
-    echo "  NEGATIVE TEST FAILED — probe stayed green after break_$t"
-    RESULT[$t]="INERT"
+  ACTIVE=$t
+  if ! "break_$t"; then
+    echo "  ERROR — break_$t failed; the control was not broken"
+    RESULT[$t]="ERROR (break_$t failed — nothing was broken)"
     overall=1
   else
-    echo "  detected"
-    RESULT[$t]="ok"
+    sleep 2
+    run_probe "$t"; prc=$?
+    case $prc in
+      0)
+        echo "  NEGATIVE TEST FAILED — probe stayed green after break_$t"
+        RESULT[$t]="INERT"; overall=1 ;;
+      1)
+        tok=$(jq -r --arg id "$t" '[.checks[]? | select(.id == $id)] | if length == 1 then (.[0].ok | tostring) else "missing" end' \
+              "$OUT/probe.$t.json" 2>/dev/null) || tok="unreadable"
+        case $tok in
+          false) echo "  detected (checks[$t].ok=false)"; RESULT[$t]="ok" ;;
+          true)  echo "  NOT ATTRIBUTED — verdict red, but checks[$t].ok=true"
+                 RESULT[$t]="INERT (red, but not from $t)"; overall=1 ;;
+          *)     RESULT[$t]="ERROR (checks[$t] $tok in probe.$t.json)"; overall=1 ;;
+        esac ;;
+      90)
+        RESULT[$t]="ERROR (probe crashed after break_$t; see probe.$t.stderr)"; overall=1 ;;
+      *)
+        RESULT[$t]="ERROR (verdict rc=$prc after break_$t)"; overall=1 ;;
+    esac
   fi
-  "unbreak_$t"
+  "unbreak_$t"; ACTIVE=""
   sleep 2
 done
 
