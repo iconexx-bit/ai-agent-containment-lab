@@ -43,7 +43,7 @@ schema-check:
     jsonschema.validate(d,s); print("schema ok")
     PY
 
-# THE gate. Every listed control falsifiable, or do not record.
+# THE gate. 5/5 or do not record.
 verify-negatives:
     ./scripts/negatives.sh
 

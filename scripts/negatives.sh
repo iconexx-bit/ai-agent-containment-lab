@@ -3,10 +3,11 @@
 #
 # A green probe on a healthy range proves nothing: it may be green because the
 # checks are inert. This harness breaks one control at a time and asserts the
-# probe goes RED. Every listed control, or the range is not ready to be recorded.
+# probe goes RED. 5/5 or the range is not ready to be recorded.
 #
 #   exit 0 = all negative tests detected
 #   exit 1 = at least one break went undetected (probe is inert)
+#   exit 3 = nothing inert, but some controls are UNPROVEN (listed with source)
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -20,13 +21,19 @@ RANGE_NET="${RANGE_NET:-agentlab0}"
 OUT="$ROOT/artifacts/negatives"
 mkdir -p "$OUT"
 
-# sigma has no negative here: it moved the LIVE rules file and restarted the production
-# manager. Lab code never acts on the live SIEM (tests/test-no-live-writes.sh).
-ALL=(egress tripwire canaries sim_ca)
-TESTS=(); for t in "${ALL[@]}"; do
-  [[ " ${PROBE_SKIP:-} " == *" $t "* ]] || TESTS+=("$t")
-done
+ALL=(egress tripwire sigma canaries sim_ca)
+# Controls with no negative in this harness, and why. Reported, never silently dropped.
+# Lab code never acts on the live SIEM (tests/test-no-live-writes.sh).
+declare -A NO_NEG=(
+  [sigma]="no non-destructive negative yet; the old one mutated the LIVE manager"
+)
 declare -A RESULT
+TESTS=(); for t in "${ALL[@]}"; do
+  if [[ -n "${NO_NEG[$t]:-}" ]]; then RESULT[$t]="UNPROVEN (code: ${NO_NEG[$t]})"
+  elif [[ " ${PROBE_SKIP:-} " == *" $t "* ]]; then
+    RESULT[$t]="UNPROVEN (operator: PROBE_SKIP) — check not verified, so not falsifiable here"
+  else TESTS+=("$t"); fi
+done
 
 COMPOSE="${COMPOSE_FILE:-range/compose.yml}"
 _net() { # $1 = extra flags
@@ -84,12 +91,13 @@ done
 
 echo
 echo "== summary =="
-pass=0
-for t in "${TESTS[@]}"; do
+pass=0; unproven=()
+for t in "${ALL[@]}"; do
   printf '  %-12s %s\n' "$t" "${RESULT[$t]}"
   [[ "${RESULT[$t]}" == "ok" ]] && pass=$((pass+1))
+  [[ "${RESULT[$t]}" == UNPROVEN* ]] && unproven+=("$t")
 done
-echo "  ${pass}/${#TESTS[@]} controls proven falsifiable"
+echo "  ${pass}/${#ALL[@]} controls proven falsifiable"
 
 # restoration must be verified, not assumed
 echo
@@ -102,6 +110,9 @@ else
   overall=1
 fi
 
+if [[ $overall -eq 0 && ${#unproven[@]} -gt 0 ]]; then
+  echo; echo "NEGATIVES INCOMPLETE — unproven: ${unproven[*]} (not recordable)" >&2; exit 3
+fi
 [[ $overall -eq 0 ]] && { echo; echo "NEGATIVES OK — range is recordable"; exit 0; }
 echo; echo "NEGATIVES FAILED" >&2
 exit 1
