@@ -43,7 +43,7 @@ schema-check:
     jsonschema.validate(d,s); print("schema ok")
     PY
 
-# THE gate. 5/5 or do not record.
+# THE gate. Every listed control falsifiable, or do not record.
 verify-negatives:
     ./scripts/negatives.sh
 
@@ -83,12 +83,6 @@ break-canaries:
     set -uo pipefail
     source range.env
     docker exec "$CANARY_CONTAINER" userdel ctf-canary
-
-break-sigma:
-    #!/usr/bin/env bash
-    set -uo pipefail
-    source range.env
-    docker exec "$WAZUH_CONTAINER" mv /var/ossec/etc/rules/containment.xml /tmp/
 
 break-docker:
     sudo systemctl restart docker

@@ -3,7 +3,7 @@
 #
 # A green probe on a healthy range proves nothing: it may be green because the
 # checks are inert. This harness breaks one control at a time and asserts the
-# probe goes RED. 5/5 or the range is not ready to be recorded.
+# probe goes RED. Every listed control, or the range is not ready to be recorded.
 #
 #   exit 0 = all negative tests detected
 #   exit 1 = at least one break went undetected (probe is inert)
@@ -20,7 +20,9 @@ RANGE_NET="${RANGE_NET:-agentlab0}"
 OUT="$ROOT/artifacts/negatives"
 mkdir -p "$OUT"
 
-ALL=(egress tripwire sigma canaries sim_ca)
+# sigma has no negative here: it moved the LIVE rules file and restarted the production
+# manager. Lab code never acts on the live SIEM (tests/test-no-live-writes.sh).
+ALL=(egress tripwire canaries sim_ca)
 TESTS=(); for t in "${ALL[@]}"; do
   [[ " ${PROBE_SKIP:-} " == *" $t "* ]] || TESTS+=("$t")
 done
@@ -38,17 +40,6 @@ unbreak_egress() { _net "--internal"; }
 
 break_tripwire()   { docker stop range-dns >/dev/null 2>&1; }
 unbreak_tripwire() { docker start range-dns >/dev/null 2>&1; sleep 4; }
-
-break_sigma() {
-  docker exec "$WAZUH_CONTAINER" sh -c \
-    "mv /var/ossec/etc/rules/containment.xml /tmp/containment.xml.bak" 2>/dev/null
-  docker exec "$WAZUH_CONTAINER" /var/ossec/bin/wazuh-control restart >/dev/null 2>&1
-}
-unbreak_sigma() {
-  docker exec "$WAZUH_CONTAINER" sh -c \
-    "mv /tmp/containment.xml.bak /var/ossec/etc/rules/containment.xml" 2>/dev/null || true
-  docker exec "$WAZUH_CONTAINER" /var/ossec/bin/wazuh-control restart >/dev/null 2>&1 || true
-}
 
 break_canaries()   { docker exec "$CANARY_CONTAINER" userdel ctf-canary; }
 unbreak_canaries() { docker exec "$CANARY_CONTAINER" useradd -M -s /usr/sbin/nologin ctf-canary 2>/dev/null || true; }
