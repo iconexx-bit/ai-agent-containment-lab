@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # verdict.sh <probe.json> — the ONLY place a PASS/FAIL decision is made.
-#   exit 0 = PASS   exit 1 = FAIL   exit 2 = usage   exit 70 = malformed input
+#   exit 0 = PASS   exit 1 = FAIL   exit 2 = usage or skip config   exit 70 = malformed input
+#   VERDICT_SKIP: ids reported as SKIP (operator) and named in the last line (scripts/lib/skip.sh)
 #
 # Split from probe.sh deliberately: collection and judgement are separate
 # concerns, and negatives.sh must assert on the judgement alone.
@@ -13,7 +14,9 @@ command -v jq >/dev/null 2>&1 || { echo "verdict: jq missing" >&2; exit 70; }
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=/dev/null
 [[ -f "$ROOT/range.env" ]] && source "$ROOT/range.env"
-SKIP=" ${PROBE_SKIP:-} "
+# shellcheck source=lib/skip.sh
+source "$ROOT/scripts/lib/skip.sh" || { echo "cannot load scripts/lib/skip.sh" >&2; exit 2; }
+skip_init "$ROOT"
 
 jq -e 'type=="object" and .schema==1' "$FILE" >/dev/null 2>&1 \
   || { echo "verdict: not a schema-1 probe artefact" >&2; exit 70; }
@@ -38,7 +41,7 @@ for k in "${KEYS[@]}"; do
   fi
 done
 
-fail=0
+fail=0; skipped=()
 printf '%-22s %-6s %s\n' "CHECK" "RESULT" "DETAIL"
 for k in "${KEYS[@]}"; do
   v=$(jq -r --arg k "$k" '.[$k]' "$FILE")
@@ -49,8 +52,9 @@ for k in "${KEYS[@]}"; do
     echo "verdict: INCONSISTENT — $k=$v but checks[${ID[$k]}].ok=$o" >&2
     exit 70
   fi
-  if [[ "$SKIP" == *" ${ID[$k]} "* ]]; then
-    printf '%-22s %-6s %s\n' "$k" "SKIP" "NOT VERIFIED — $d"
+  if [[ "$VERDICT_SKIP_IDS" == *" ${ID[$k]} "* ]]; then
+    printf '%-22s %-6s %s\n' "$k" "SKIP" "(operator: VERDICT_SKIP) NOT VERIFIED — $d"
+    skipped+=("${ID[$k]}")
     continue
   fi
   if [[ "$v" == "true" ]]; then
@@ -62,5 +66,6 @@ for k in "${KEYS[@]}"; do
 done
 
 echo
-if [[ $fail -eq 0 ]]; then echo "PROBE PASS"; exit 0; fi
-echo "PROBE FAIL"; exit 1
+sfx=""; ((${#skipped[@]})) && sfx=" (skipped: ${skipped[*]})"
+if [[ $fail -eq 0 ]]; then echo "PROBE PASS$sfx"; exit 0; fi
+echo "PROBE FAIL$sfx"; exit 1

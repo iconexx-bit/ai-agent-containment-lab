@@ -7,12 +7,16 @@
 #
 #   exit 0 = all negative tests detected
 #   exit 1 = at least one break went undetected (probe is inert)
+#   exit 2 = skip configuration error (scripts/lib/skip.sh): nothing was run
 #   exit 3 = nothing inert, but some controls are UNPROVEN (listed with source)
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=/dev/null
 [[ -f "$ROOT/range.env" ]] && source "$ROOT/range.env"
+# shellcheck source=lib/skip.sh
+source "$ROOT/scripts/lib/skip.sh" || { echo "cannot load scripts/lib/skip.sh" >&2; exit 2; }
+skip_init "$ROOT"
 
 CANARY_CONTAINER="${CANARY_CONTAINER:-range-idp}"
 WAZUH_CONTAINER="${WAZUH_CONTAINER:-wazuh-manager}"
@@ -30,8 +34,10 @@ declare -A NO_NEG=(
 declare -A RESULT
 TESTS=(); for t in "${ALL[@]}"; do
   if [[ -n "${NO_NEG[$t]:-}" ]]; then RESULT[$t]="UNPROVEN (code: ${NO_NEG[$t]})"
-  elif [[ " ${PROBE_SKIP:-} " == *" $t "* ]]; then
-    RESULT[$t]="UNPROVEN (operator: PROBE_SKIP) — check not verified, so not falsifiable here"
+  elif [[ "$VERDICT_SKIP_IDS" == *" $t "* ]]; then
+    RESULT[$t]="UNPROVEN (operator: VERDICT_SKIP) — the verdict does not judge it, so a break cannot be detected"
+  elif [[ "$NEG_SKIP_IDS" == *" $t "* ]]; then
+    RESULT[$t]="UNPROVEN (operator: NEG_SKIP) — negative not run by operator choice"
   else TESTS+=("$t"); fi
 done
 
