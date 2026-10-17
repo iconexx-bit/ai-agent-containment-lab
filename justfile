@@ -47,6 +47,17 @@ schema-check:
 verify-negatives:
     ./scripts/negatives.sh
 
+# all lab tests (hermetic, no live services); the pre-push hook runs this
+test:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    mapfile -t ts < <(git ls-files 'tests/test-*.sh')
+    (( ${#ts[@]} > 0 )) || { echo "no tests found" >&2; exit 2; }
+    rc=0; n=0
+    for t in "${ts[@]}"; do n=$((n+1)); echo "== $t"; bash "$t" </dev/null || rc=1; done
+    echo "ran $n/${#ts[@]} tests, rc=$rc"
+    exit "$rc"
+
 # full friday gate: preflight -> up -> negatives -> docker restart -> killswitch
 ready:
     ./scripts/ready.sh

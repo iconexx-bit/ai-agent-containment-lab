@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# pre-push gate (D5 P2c): the lab test suite must pass. Bypass only with --no-verify + written reason.
+set -uo pipefail
+cd "$(git rev-parse --show-toplevel)" || exit 1
+exec just test </dev/null
