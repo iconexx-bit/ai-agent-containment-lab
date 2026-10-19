@@ -86,13 +86,15 @@ killswitch-status:
 break-egress:
     #!/usr/bin/env bash
     set -uo pipefail
-    source range.env
+    source scripts/lib/env.sh || exit 2
+    load_range_env "$PWD" strict || exit 2
     docker network connect bridge "$CANARY_CONTAINER"
 
 break-canaries:
     #!/usr/bin/env bash
     set -uo pipefail
-    source range.env
+    source scripts/lib/env.sh || exit 2
+    load_range_env "$PWD" strict || exit 2
     docker exec "$CANARY_CONTAINER" userdel ctf-canary
 
 break-docker:

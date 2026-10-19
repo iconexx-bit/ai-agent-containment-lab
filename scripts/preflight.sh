@@ -4,8 +4,9 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=/dev/null
-[[ -f "$ROOT/range.env" ]] && source "$ROOT/range.env"
+# shellcheck source=lib/env.sh
+source "$ROOT/scripts/lib/env.sh" || { echo "cannot load scripts/lib/env.sh" >&2; exit 2; }
+load_range_env "$ROOT" || exit 2
 
 RANGE_NET="${RANGE_NET:-agentlab0}"
 RANGE_CIDR="${RANGE_CIDR:-10.66.0.0/16}"

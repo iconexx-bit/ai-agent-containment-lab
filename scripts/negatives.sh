@@ -13,10 +13,13 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=/dev/null
-[[ -f "$ROOT/range.env" ]] && source "$ROOT/range.env"
+# shellcheck source=lib/env.sh
+source "$ROOT/scripts/lib/env.sh" || { echo "cannot load scripts/lib/env.sh" >&2; exit 2; }
+load_range_env "$ROOT" strict || exit 2
 # shellcheck source=lib/skip.sh
 source "$ROOT/scripts/lib/skip.sh" || { echo "cannot load scripts/lib/skip.sh" >&2; exit 2; }
+# shellcheck source=lib/no-neg.sh
+source "$ROOT/scripts/lib/no-neg.sh" || { echo "cannot load scripts/lib/no-neg.sh" >&2; exit 2; }
 skip_init "$ROOT"
 
 CANARY_CONTAINER="${CANARY_CONTAINER:-range-idp}"
@@ -27,11 +30,8 @@ OUT="$ROOT/artifacts/negatives"
 mkdir -p "$OUT"
 
 ALL=(egress tripwire sigma canaries sim_ca)
-# Controls with no negative in this harness, and why. Reported, never silently dropped.
-# Lab code never acts on the live SIEM (tests/test-no-live-writes.sh).
-declare -A NO_NEG=(
-  [sigma]="no non-destructive negative yet; the old one mutated the LIVE manager"
-)
+# Controls with no negative in this harness, and why: NO_NEG in scripts/lib/no-neg.sh (data only).
+# Reported, never silently dropped. Lab code never acts on the live SIEM (tests/test-no-live-writes.sh).
 declare -A RESULT
 TESTS=(); for t in "${ALL[@]}"; do
   if [[ -n "${NO_NEG[$t]:-}" ]]; then RESULT[$t]="UNPROVEN (code: ${NO_NEG[$t]})"
@@ -54,6 +54,22 @@ unbreak_egress() { _net "--internal"; }
 
 break_tripwire()   { docker stop range-dns >/dev/null 2>&1; }
 unbreak_tripwire() { docker start range-dns >/dev/null 2>&1; sleep 4; }
+
+# sigma: mutate the EXPECTATION, never the live manager. probe.sh must then report sigma red.
+# Proves the count comparison is live; it does NOT prove the rules are loaded in analysisd.
+SIGMA_ORIG="" SIGMA_WAS_EXPORTED=0
+break_sigma() {
+  [[ ${SIGMA_EXPECTED:-} =~ ^[1-9][0-9]*$ ]] \
+    || { echo "break_sigma: SIGMA_EXPECTED='${SIGMA_EXPECTED:-}' is not a positive integer" >&2; return 1; }
+  SIGMA_ORIG=$SIGMA_EXPECTED
+  SIGMA_WAS_EXPORTED=0; [[ $(declare -p SIGMA_EXPECTED) =~ ^declare\ -[a-zA-Z]*x ]] && SIGMA_WAS_EXPORTED=1
+  export SIGMA_EXPECTED=$((SIGMA_ORIG + 1))
+}
+unbreak_sigma() {
+  [[ -n $SIGMA_ORIG ]] || { echo "unbreak_sigma: nothing to restore" >&2; return 1; }
+  SIGMA_EXPECTED=$SIGMA_ORIG; SIGMA_ORIG=""
+  ((SIGMA_WAS_EXPORTED)) || export -n SIGMA_EXPECTED
+}
 
 break_canaries()   { docker exec "$CANARY_CONTAINER" userdel ctf-canary; }
 unbreak_canaries() { docker exec "$CANARY_CONTAINER" useradd -M -s /usr/sbin/nologin ctf-canary 2>/dev/null || true; }
@@ -117,7 +133,8 @@ for t in "${TESTS[@]}"; do
         tok=$(jq -r --arg id "$t" '[.checks[]? | select(.id == $id)] | if length == 1 then (.[0].ok | tostring) else "missing" end' \
               "$OUT/probe.$t.json" 2>/dev/null) || tok="unreadable"
         case $tok in
-          false) echo "  detected (checks[$t].ok=false)"; RESULT[$t]="ok" ;;
+          false) echo "  detected (checks[$t].ok=false)"; RESULT[$t]="ok"
+                 [[ $t == sigma ]] && echo "  note: expectation mutated — the comparison is live; loaded-in-analysisd is not proven" ;;
           true)  echo "  NOT ATTRIBUTED — verdict red, but checks[$t].ok=true"
                  RESULT[$t]="INERT (red, but not from $t)"; overall=1 ;;
           *)     RESULT[$t]="ERROR (checks[$t] $tok in probe.$t.json)"; overall=1 ;;

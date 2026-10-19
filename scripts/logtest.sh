@@ -7,8 +7,9 @@
 # Output: $OUT/<fixture>.tsv  idx rule_id level alert decoder srcip dns.query event
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=/dev/null
-[[ -f "$ROOT/range.env" ]] && source "$ROOT/range.env"
+# shellcheck source=lib/env.sh
+source "$ROOT/scripts/lib/env.sh" || { echo "cannot load scripts/lib/env.sh" >&2; exit 2; }
+load_range_env "$ROOT" || exit 2
 LIVE="${WAZUH_CONTAINER:-wazuh-wazuh.manager-1}"
 CONF="${LOGTEST_CONF:-$HOME/homelab/wazuh/single-node/config/wazuh_cluster/wazuh_manager.conf}"
 C="range-logtest-$$"

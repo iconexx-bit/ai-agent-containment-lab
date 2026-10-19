@@ -12,8 +12,9 @@ FILE="${1:-}"
 command -v jq >/dev/null 2>&1 || { echo "verdict: jq missing" >&2; exit 70; }
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=/dev/null
-[[ -f "$ROOT/range.env" ]] && source "$ROOT/range.env"
+# shellcheck source=lib/env.sh
+source "$ROOT/scripts/lib/env.sh" || { echo "cannot load scripts/lib/env.sh" >&2; exit 2; }
+load_range_env "$ROOT" || exit 2
 # shellcheck source=lib/skip.sh
 source "$ROOT/scripts/lib/skip.sh" || { echo "cannot load scripts/lib/skip.sh" >&2; exit 2; }
 skip_init "$ROOT"

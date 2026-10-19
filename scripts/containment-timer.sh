@@ -3,8 +3,9 @@
 # NOT the duration of an iptables syscall. That number is meaningless.
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=/dev/null
-[[ -f "$ROOT/range.env" ]] && source "$ROOT/range.env"
+# shellcheck source=lib/env.sh
+source "$ROOT/scripts/lib/env.sh" || { echo "cannot load scripts/lib/env.sh" >&2; exit 2; }
+load_range_env "$ROOT" strict || exit 2
 RUN="$(cat "$ROOT/.run-id" 2>/dev/null || echo "$ROOT/artifacts/adhoc")"
 mkdir -p "$RUN"
 DOM="${TRIPWIRE_DOMAIN:-canary.tripwire-range.invalid}"
