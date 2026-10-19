@@ -133,7 +133,7 @@ out=$("${CLEAN[@]}" VERDICT_SKIP="" bash "$d/scripts/verdict.sh" "$d/ok.json" 2>
   && grep -q 'VERDICT_SKIP overridden by environment' "$d/err"; } \
   || no "E9 verdict: exported VERDICT_SKIP=\"\" must beat range.env (rc=$rc): $out $(cat "$d/err")"
 
-d=$(tree e10 $'SIGMA_EXPECTED=8\nWAZUH_HOST=127.0.0.1\nWAZUH_USER=u\nWAZUH_PASS=p\nRANGE_CIDR=10.66.0.0/16'); stubs "$d"
+d=$(tree e10 $'SIGMA_EXPECTED=8\nWAZUH_HOST=127.0.0.1\nWAZUH_USER=u\nWAZUH_PASS=p\nWAZUH_API_PIN=sha256//0vxCZwJEabcdefghijklmnopqrstuvwxyz0123NMe8A=\nRANGE_CIDR=10.66.0.0/16'); stubs "$d"
 sig() { jq -r '.checks[] | select(.id=="sigma") | "\(.ok) \(.detail)"' <<<"$1" 2>/dev/null; }
 out=$("${CLEAN[@]}" PATH="$d/bin:$PATH" bash "$d/scripts/probe.sh" 2>"$d/err0"); rc=$?
 [[ $rc == 0 && $(sig "$out") == "true loaded=8 expected=8 "* ]] \
