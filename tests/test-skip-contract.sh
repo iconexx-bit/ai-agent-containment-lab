@@ -5,6 +5,8 @@
 #     because a check the verdict does not judge cannot detect a break.
 #   NEG_SKIP: negatives only (UNPROVEN (operator: NEG_SKIP)); the verdict still judges the check.
 #   Excluded controls are never broken. Source precedence: code (NO_NEG) > VERDICT_SKIP > NEG_SKIP.
+#   NO_NEG lives in scripts/lib/no-neg.sh (data only): unknown id, empty reason or a missing file
+#     -> exit 2 before any docker call; negatives.sh holds no inline NO_NEG.
 #   PROBE_SKIP is retired: set at all (even empty; range.env or environment) -> exit 2, nothing run.
 #   Unknown id in VERDICT_SKIP / NEG_SKIP -> exit 2 (ids come from schemas/probe.v1.json).
 # Hermetic: temp trees, stub probe/docker/sleep (negatives also gets a stub verdict); the real
@@ -18,7 +20,8 @@ command -v jq >/dev/null 2>&1 || { echo "jq missing" >&2; exit 2; }
 
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 fail=0; no() { echo "FAIL: $*"; fail=1; }
-CLEAN=(env -u PROBE_SKIP -u VERDICT_SKIP -u NEG_SKIP)
+CLEAN=(env -u PROBE_SKIP -u VERDICT_SKIP -u NEG_SKIP -u SIGMA_EXPECTED)
+NONEG=""   # "" = repo scripts/lib/no-neg.sh, __DELETE__ = remove it, else its replacement content
 # every check red: since D5 P2b negatives credit a break only if checks[<target>].ok == false
 ALLRED='{"schema":1,"checks":[{"id":"egress","ok":false},{"id":"tripwire","ok":false},{"id":"sigma","ok":false},{"id":"canaries","ok":false},{"id":"sim_ca","ok":false}]}'
 
@@ -27,9 +30,15 @@ tree() { # $1 = name, $2 = range.env line(s); prints the tree path
   mkdir -p "$d/scripts" "$d/schemas" "$d/attestation" "$d/bin" || exit 2
   cp "$ROOT/scripts/verdict.sh" "$ROOT/scripts/negatives.sh" "$d/scripts/" || exit 2
   if [[ -d "$ROOT/scripts/lib" ]]; then cp -r "$ROOT/scripts/lib" "$d/scripts/" || exit 2; fi
+  mkdir -p "$d/scripts/lib" || exit 2
+  case $NONEG in
+    "") ;;
+    __DELETE__) rm -f "$d/scripts/lib/no-neg.sh" ;;
+    *) printf '%s\n' "$NONEG" >"$d/scripts/lib/no-neg.sh" || exit 2 ;;
+  esac
   cp "$ROOT/schemas/probe.v1.json" "$d/schemas/" || exit 2
   echo "PEM" >"$d/attestation/sim-range-ca.crt"
-  printf '%s\nRANGE_CIDR=10.66.0.0/16\n' "$2" >"$d/range.env"
+  printf '%s\nRANGE_CIDR=10.66.0.0/16\nSIGMA_EXPECTED=8\n' "$2" >"$d/range.env"
   echo "$d"
 }
 
@@ -85,6 +94,7 @@ N() { # $1 = name, $2 = range.env, rest = extra env assignments
   [[ $(PATH="$d/bin:$PATH" command -v docker) == "$d/bin/docker" ]] || { echo "stub docker not first on PATH" >&2; exit 2; }
   out=$("${CLEAN[@]}" "$@" PATH="$d/bin:$PATH" bash "$d/scripts/negatives.sh" 2>&1); rc=$?
   dlog=$(cat "$d/docker.log" 2>/dev/null); ran=0; [[ -e "$d/probe.ran" ]] && ran=1
+  sbroken=0; [[ -e "$d/artifacts/negatives/probe.sigma.json" ]] && sbroken=1
 }
 
 N n1 'PROBE_SKIP="canaries"'
@@ -98,8 +108,11 @@ N n3 'NEG_SKIP="tripwire"'
 { ((rc == 3)) && grep -qE '^  tripwire +UNPROVEN \(operator: NEG_SKIP\)' <<<"$out" \
   && ! grep -q 'stop range-dns' <<<"$dlog"; } \
   || { no "negatives: NEG_SKIP=tripwire -> UNPROVEN (operator: NEG_SKIP), never broken"; show n3; }
-N n4 'VERDICT_SKIP="sigma"'
-grep -qE '^  sigma +UNPROVEN \(code: ' <<<"$out" || { no "negatives: code source must win over VERDICT_SKIP"; show n4; }
+NONEG='declare -A NO_NEG=([sigma]="test reason")'
+N n4 $'VERDICT_SKIP="sigma"\nNEG_SKIP="sigma"'
+{ grep -qE '^  sigma +UNPROVEN \(code: test reason\)$' <<<"$out" && ((sbroken == 0)); } \
+  || { no "negatives: code source (scripts/lib/no-neg.sh) must win over VERDICT_SKIP and NEG_SKIP, never broken"; show n4; }
+NONEG=""
 N n5 $'VERDICT_SKIP="tripwire"\nNEG_SKIP="tripwire"'
 grep -qE '^  tripwire +UNPROVEN \(operator: VERDICT_SKIP\)' <<<"$out" \
   || { no "negatives: VERDICT_SKIP must win over NEG_SKIP"; show n5; }
@@ -107,7 +120,27 @@ N n6 'NEG_SKIP="bogus"'
 { ((rc == 2)) && grep -q 'bogus' <<<"$out" && [[ -z $dlog ]]; } \
   || { no "negatives: unknown id must exit 2 naming it, before any docker call"; show n6; }
 N n7 $'VERDICT_SKIP="canaries"\nNEG_SKIP="tripwire"'
-grep -qE '2/5 controls proven falsifiable' <<<"$out" || { no "negatives: count must be 2/5 (egress, sim_ca)"; show n7; }
+grep -qE '3/5 controls proven falsifiable' <<<"$out" || { no "negatives: count must be 3/5 (egress, sigma, sim_ca)"; show n7; }
+NONEG='declare -A NO_NEG=([sigmaa]="x")'
+N n8 ''
+{ ((rc == 2)) && grep -q 'sigmaa' <<<"$out" && [[ -z $dlog ]] && ((ran == 0)); } \
+  || { no "negatives: unknown id in NO_NEG must exit 2 naming it, before any probe or docker call"; show n8; }
+NONEG=__DELETE__
+N n9 ''
+{ ((rc == 2)) && grep -q 'no-neg.sh' <<<"$out" && [[ -z $dlog ]] && ((ran == 0)); } \
+  || { no "negatives: missing scripts/lib/no-neg.sh must exit 2, before any probe or docker call"; show n9; }
+NONEG='declare -A NO_NEG=([sigma]="")'
+N n10 ''
+{ ((rc == 2)) && grep -q 'NO_NEG\[sigma\]' <<<"$out" && [[ -z $dlog ]]; } \
+  || { no "negatives: NO_NEG entry without a reason must exit 2"; show n10; }
+NONEG=""
+N n11 'VERDICT_SKIP="sigma"'
+{ ((rc == 3)) && grep -qE '^  sigma +UNPROVEN \(operator: VERDICT_SKIP\)' <<<"$out" && ((sbroken == 0)); } \
+  || { no "negatives: VERDICT_SKIP=sigma with empty NO_NEG -> UNPROVEN (operator: VERDICT_SKIP), never broken"; show n11; }
+
+# ---- structural ----------------------------------------------------------------------------
+grep -nE '^[^#]*declare[[:space:]]+-A[[:space:]]+NO_NEG' "$ROOT/scripts/negatives.sh" \
+  && no "S1 negatives.sh declares NO_NEG inline; it belongs in scripts/lib/no-neg.sh"
 
 if ((fail)); then exit 1; fi
-echo "skip-contract: PASS (verdict 8/8, negatives 7/7)"
+echo "skip-contract: PASS (verdict 8/8, negatives 11/11, structural 1/1)"
