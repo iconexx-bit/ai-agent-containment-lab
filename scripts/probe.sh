@@ -27,6 +27,7 @@ WAZUH_HOST="${WAZUH_HOST:-wazuh}"
 WAZUH_PORT="${WAZUH_PORT:-55000}"
 WAZUH_USER="${WAZUH_USER:-}"
 WAZUH_PASS="${WAZUH_PASS:-}"
+WAZUH_API_PIN="${WAZUH_API_PIN:-}"
 SIGMA_ID_MIN="${SIGMA_ID_MIN:-100200}"
 SIGMA_ID_MAX="${SIGMA_ID_MAX:-100299}"
 SIGMA_EXPECTED="${SIGMA_EXPECTED:-7}"
@@ -94,24 +95,56 @@ fi
 # ---------------------------------------------------------------------------
 sigma_loaded=false
 sigma_ids=$(seq -s, "$SIGMA_ID_MIN" "$SIGMA_ID_MAX")
+# API transport (D5 P5a, runbook 10.1, rule 7):
+#  - trust anchor = --pinnedpubkey; the cert is self-signed, so -k only disables CA validation.
+#    No valid pin -> no call at all (fail closed): an unpinned call would send the password
+#    to whoever answers on WAZUH_HOST:WAZUH_PORT.
+#  - password and bearer token never enter argv (/proc/<pid>/cmdline is readable by every local
+#    user); they reach curl as a config on an anonymous pipe: -K <(api_cfg ...).
+PIN_RE='^sha256//[A-Za-z0-9+/]{43}=(;sha256//[A-Za-z0-9+/]{43}=)*$'
+api_cfg() { # $1 = config key (user|header), $2 = value -> one curl config line, " and \ escaped
+  local v=${2//\\/\\\\}
+  v=${v//\"/\\\"}
+  printf '%s = "%s"\n' "$1" "$v"
+}
+api() { # $1 = config key, $2 = value, rest = curl args; prints body; returns curl rc
+  curl -sS -k --pinnedpubkey "$WAZUH_API_PIN" --max-time "$PROBE_TIMEOUT" \
+       -K <(api_cfg "$1" "$2") "${@:3}" 2>/dev/null
+}
+api_fail() { # $1 = curl rc -> human detail
+  case "$1" in
+    90) echo "API TLS pin mismatch (curl rc=90): certificate rotated or not the Wazuh API — update WAZUH_API_PIN only after verifying the new certificate" ;;
+    *)  echo "API call failed (curl rc=$1) against ${WAZUH_HOST}:${WAZUH_PORT}" ;;
+  esac
+}
 if [[ "$SIGMA_EXPECTED" -le 0 ]]; then
   add_check "sigma" false "wazuh-api" "SIGMA_EXPECTED=$SIGMA_EXPECTED — a zero-rule expectation is not a check"
 elif [[ -z "$WAZUH_USER" || -z "$WAZUH_PASS" ]]; then
   add_check "sigma" false "wazuh-api" "WAZUH_USER/WAZUH_PASS unset — check not configured"
+elif [[ ! $WAZUH_API_PIN =~ $PIN_RE ]]; then
+  add_check "sigma" false "wazuh-api" "WAZUH_API_PIN unset or malformed (want sha256//<base64>) — no unpinned API call is made"
+elif [[ $WAZUH_USER$WAZUH_PASS == *[$'\r\n']* ]]; then
+  add_check "sigma" false "wazuh-api" "WAZUH_USER/WAZUH_PASS contain a line break — refused"
 else
-  token=$(curl -sk --max-time "$PROBE_TIMEOUT" -u "$WAZUH_USER:$WAZUH_PASS" \
-          -X POST "https://${WAZUH_HOST}:${WAZUH_PORT}/security/user/authenticate" \
-          2>/dev/null | jq -r '.data.token // empty')
-  if [[ -z "$token" ]]; then
+  resp=$(api user "$WAZUH_USER:$WAZUH_PASS" -X POST \
+         "https://${WAZUH_HOST}:${WAZUH_PORT}/security/user/authenticate"); crc=$?
+  token=$(jq -r '.data.token // empty' <<<"$resp" 2>/dev/null)
+  if ((crc != 0)); then
+    add_check "sigma" false "wazuh-api" "$(api_fail "$crc")"
+  elif [[ -z "$token" || $token == *[$'\r\n"\\']* ]]; then
     add_check "sigma" false "wazuh-api" "authentication failed against ${WAZUH_HOST}:${WAZUH_PORT}"
   else
-    loaded=$(curl -sk --max-time "$PROBE_TIMEOUT" -H "Authorization: Bearer $token" \
-             "https://${WAZUH_HOST}:${WAZUH_PORT}/rules?rule_ids=${sigma_ids}&limit=500" \
-             2>/dev/null | jq -r '.data.total_affected_items // 0')
-    [[ "$loaded" =~ ^[0-9]+$ ]] || loaded=0
-    [[ "$loaded" -eq "$SIGMA_EXPECTED" ]] && sigma_loaded=true
-    add_check "sigma" "$sigma_loaded" "wazuh-api" \
-      "loaded=$loaded expected=$SIGMA_EXPECTED range=${SIGMA_ID_MIN}-${SIGMA_ID_MAX}"
+    resp=$(api header "Authorization: Bearer $token" \
+           "https://${WAZUH_HOST}:${WAZUH_PORT}/rules?rule_ids=${sigma_ids}&limit=500"); crc=$?
+    if ((crc != 0)); then
+      add_check "sigma" false "wazuh-api" "$(api_fail "$crc")"
+    else
+      loaded=$(jq -r '.data.total_affected_items // 0' <<<"$resp" 2>/dev/null)
+      [[ "$loaded" =~ ^[0-9]+$ ]] || loaded=0
+      [[ "$loaded" -eq "$SIGMA_EXPECTED" ]] && sigma_loaded=true
+      add_check "sigma" "$sigma_loaded" "wazuh-api" \
+        "loaded=$loaded expected=$SIGMA_EXPECTED range=${SIGMA_ID_MIN}-${SIGMA_ID_MAX}"
+    fi
   fi
 fi
 
