@@ -30,7 +30,7 @@ WAZUH_PASS="${WAZUH_PASS:-}"
 WAZUH_API_PIN="${WAZUH_API_PIN:-}"
 SIGMA_ID_MIN="${SIGMA_ID_MIN:-100200}"
 SIGMA_ID_MAX="${SIGMA_ID_MAX:-100299}"
-SIGMA_EXPECTED="${SIGMA_EXPECTED:-7}"
+SIGMA_EXPECTED="${SIGMA_EXPECTED:-}"   # no default (D5 P5b): the rule count of the deployed pack, set in range.env
 
 command -v jq >/dev/null 2>&1 || { echo "probe: jq missing" >&2; exit 70; }
 
@@ -117,8 +117,13 @@ api_fail() { # $1 = curl rc -> human detail
     *)  echo "API call failed (curl rc=$1) against ${WAZUH_HOST}:${WAZUH_PORT}" ;;
   esac
 }
-if [[ "$SIGMA_EXPECTED" -le 0 ]]; then
-  add_check "sigma" false "wazuh-api" "SIGMA_EXPECTED=$SIGMA_EXPECTED — a zero-rule expectation is not a check"
+# The expectation is validated BEFORE any [[ -eq ]]: bash arithmetic evaluates array subscripts
+# (SIGMA_EXPECTED='PATH[$(cmd)]' runs cmd), 'abc' aborts the probe under set -u (a crash, not
+# data) and ' 8' compares equal to 8. Same contract as negatives.sh break_sigma.
+if [[ -z $SIGMA_EXPECTED ]]; then
+  add_check "sigma" false "wazuh-api" "SIGMA_EXPECTED unset — set it in range.env to the rule count of the pack ops deployed; no API call is made"
+elif [[ ! $SIGMA_EXPECTED =~ ^[1-9][0-9]*$ ]]; then
+  add_check "sigma" false "wazuh-api" "SIGMA_EXPECTED malformed (want a positive integer) — no API call is made"
 elif [[ -z "$WAZUH_USER" || -z "$WAZUH_PASS" ]]; then
   add_check "sigma" false "wazuh-api" "WAZUH_USER/WAZUH_PASS unset — check not configured"
 elif [[ ! $WAZUH_API_PIN =~ $PIN_RE ]]; then
