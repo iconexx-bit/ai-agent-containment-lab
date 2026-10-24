@@ -6,8 +6,14 @@
 #   D3 justfile: no break-docker; recipe verify-persistence runs the script; ready.sh never calls it
 #   D4 sudoers.d/range-lab grants no NOPASSWD restart of docker (the sudo password is part of the gate)
 #   D5 README: `just ready` is no longer described as restarting the daemon; verify-persistence is named
+#   D6 (O17/O24) the unit file, the arm script and the README no longer claim that Docker drops the jump on a
+#      daemon restart (it keeps DOCKER-USER, O17); they name the real job of the unit: a host reboot
 #   V0..V10 behaviour of scripts/verify-persistence.sh in a fake world (fake sudo/systemctl/docker/sleep,
 #      stub killswitch.sh; a real pseudo-terminal via script(1)) — see the table in each case
+#   V11 (O24) Docker keeps the jump and the unit does nothing: phase B must FAIL — it starts from the lost
+#      state (killswitch removed, marker set), so a PASS can only come from the unit (rule 71)
+#   V12 (O24) the evidence of phase B shows the lost state before the restart and the jump after it
+#   V13 a DOCKER-USER snapshot that is not an iptables listing (sudo refused) is an environment error, not evidence
 # Each scanner is proven on fixtures first (rule 54). Hermetic: no Docker, no sudo, no network.
 #   exit 0 pass / 1 assertion / 2 harness
 set -uo pipefail
@@ -81,6 +87,20 @@ grep -qF 'verify-persistence' "$ROOT/README.md" || no "D5 README does not mentio
 grep -nF 'killswitch, Docker restart' "$ROOT/README.md" >/dev/null && no "D5 README still describes just ready as including a Docker restart"
 grep -nF 'and restarts the Docker daemon' "$ROOT/README.md" >/dev/null && no "D5 README still says just ready restarts the Docker daemon"
 
+# ---- D6 (O17/O24) -----------------------------------------------------------------------------------
+# the false claim, in any wording seen so far; proven on fixtures first (rule 54)
+FALSE='(recreates (the )?DOCKER-USER|drops our jump|re-arms it via systemd after a Docker restart)'
+printf '# Docker recreates the DOCKER-USER chain on daemon restart and drops our jump.\n' >"$T/d6.bad1"
+printf '> only re-arms it via systemd after a Docker restart, and only if the marker is set.\n' >"$T/d6.bad2"
+printf '# Docker keeps DOCKER-USER across a daemon restart; the real job is a host reboot.\n' >"$T/d6.ok"
+{ grep -qiE "$FALSE" "$T/d6.bad1" && grep -qiE "$FALSE" "$T/d6.bad2" && ! grep -qiE "$FALSE" "$T/d6.ok"; } \
+  || { echo "GUARD UNPROVEN: D6 false-claim scan" >&2; exit 2; }
+for f in systemd/range-killswitch.service scripts/range-killswitch-arm.sh README.md; do
+  rc=0; grep -qiE "$FALSE" "$ROOT/$f" || rc=$?
+  ((rc == 1)) || no "D6 $f still claims that Docker drops the jump on a daemon restart (O17 showed it keeps it), grep rc=$rc"
+  grep -qi 'reboot' "$ROOT/$f" || no "D6 $f does not name the host reboot as the case the unit exists for (O24)"
+done
+
 # ---- V: behaviour of scripts/verify-persistence.sh ----------------------------------------------------
 if [[ ! -f $VP ]]; then
   no "V0 scripts/verify-persistence.sh does not exist: behaviour not tested"
@@ -116,6 +136,7 @@ case "${a[0]:-}" in
     [[ -n ${FAKE_DOCKER_DROPS:-} ]] && rm -f "$W/jump"
     if [[ -e $FAKE_MARKER && -n ${FAKE_UNIT_REARMS:-} ]]; then echo "${FAKE_REARM_DELAY:-0}" >"$W/rearm"; else rm -f "$W/rearm"; fi ;;
   iptables)
+    [[ -n ${FAKE_IPT_FAIL:-} ]] && { echo "sudo: a password is required" >&2; exit 1; }
     if [[ ${a[1]:-} == -S && ${a[2]:-} == DOCKER-USER ]]; then
       echo "-N DOCKER-USER"; [[ -e $W/jump ]] && echo "-A DOCKER-USER -j RANGE-KILL"; echo "-A DOCKER-USER -j RETURN"
     fi ;;
@@ -173,6 +194,14 @@ DK
   grep -q 'docker 29.6.1' <<<"$out" || { no "V6 output must carry the daemon version"; show v6; }
   clean || { no "V6 end state: killswitch disarmed and marker removed"; show v6; }
   ls "$d"/artifacts/verify-persistence-*/result.txt >/dev/null 2>&1 || { no "V6 evidence file artifacts/verify-persistence-*/result.txt missing"; show v6; }
+  # V12: phase B evidence — lost state before the restart, the jump after it (O24)
+  ev=$(ls -d "$d"/artifacts/verify-persistence-* 2>/dev/null | head -n1)
+  if [[ -z $ev ]]; then no "V12 no evidence directory"; else
+    { [[ -f $ev/b.before.txt ]] && grep -qx -- '-N DOCKER-USER' "$ev/b.before.txt"; } || no "V12 b.before.txt missing or not an iptables listing"
+    rc=0; grep -q 'RANGE-KILL' "$ev/b.before.txt" 2>/dev/null || rc=$?
+    ((rc == 1)) || { no "V12 phase B must start from the lost state: b.before.txt still has the jump (grep rc=$rc)"; show v6; }
+    grep -q 'RANGE-KILL' "$ev/b.after.txt" 2>/dev/null || { no "V12 b.after.txt must show the re-armed jump"; show v6; }
+  fi
 
   # refusals: nothing may restart, nothing may be armed or marked
   run v1 notty "$TOK" "" FAKE_UNIT_REARMS=1
@@ -206,10 +235,18 @@ DK
   { ((rc == 1)) && grep -q 'PERSISTENCE FAIL' <<<"$out"; } || { no "V8b re-arm slower than the bounded wait: rc 1 (the wait is finite)"; show v8b; }
   run v10 tty "$TOK" "" 'PERSIST_WAIT_ARM=x[$(touch pwned)]'
   { ((rc == 2 && nrest == 0)) && [[ ! -e $d/pwned ]]; } || { no "V10 non-numeric PERSIST_WAIT_ARM: rc 2 before anything runs, payload not executed (rule 69)"; show v10; }
+  run v11 tty "$TOK" ""
+  { ((rc == 1 && nrest == 2)) && grep -q 'PERSISTENCE FAIL' <<<"$out" && grep -q 'docker-preserves-jump=yes' <<<"$out"; } \
+    || { no "V11 Docker keeps the jump, the unit does nothing: phase B must FAIL (rc 1) — a PASS here is the vacuous gate of O24"; show v11; }
+  clean || { no "V11 end state clean"; show v11; }
+  run v13 tty "$TOK" "" FAKE_UNIT_REARMS=1 FAKE_IPT_FAIL=1
+  { ((rc == 3 && nrest == 0)) && grep -qi 'DOCKER-USER' <<<"$out"; } \
+    || { no "V13 unreadable DOCKER-USER snapshot: rc 3 before any restart, says why (an error text is not evidence)"; show v13; }
+  clean || { no "V13 end state clean"; show v13; }
   run v9 tty "$TOK" "" FAKE_DOCKER_NEVER=1
   { ((rc == 3 && nrest == 1)); } || { no "V9 daemon never returns: rc 3 after the first restart, no second restart"; show v9; }
   clean || { no "V9 end state clean after an environment error (trap)"; show v9; }
 fi
 
 if ((fail)); then exit 1; fi
-echo "persistence-gate: PASS (no daemon restart outside verify-persistence 1/1, break-docker gone, sudoers tightened, README; behaviour V1-V10; guards 2/2)"
+echo "persistence-gate: PASS (no daemon restart outside verify-persistence 1/1, break-docker gone, sudoers tightened, README; docs D6; behaviour V1-V13; guards 3/3)"
