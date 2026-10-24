@@ -6,11 +6,12 @@ New tooling ideas go to ## Backlog as one-liners, not code. Exception: CI-blocki
 
 ## Backlog
 - restore-canaries recipe — быстрый reset canary-состояния, непроверено, after rc
-- range-dns healthcheck checks A record via bare nslookup, but dnsmasq only answers AAAA (::) — false unhealthy, fix healthcheck test string, after rc
-- Detection pack: journald decoder for tags `dnsmasq` / `range-idp`, then Sigma
-  rules 100200-100299 (7 rules, matching SIGMA_EXPECTED). Verified by
-  `scripts/negatives.sh sigma` — break/unbreak must flip the check.
-  Do it alongside the Wazuh triage blog post; the rules are its illustration.
+- ~~range-dns healthcheck: nslookup of an A record while dnsmasq answered only AAAA~~ — done 2026-10-14
+  (`9fbbdc9`): NULL sinkhole answers A and AAAA; the healthcheck resolves the in-scope `health.sim.invalid`.
+- ~~Detection pack~~ — done: v1 = 8 rules (`rules/containment.xml`: 100200-100206 + 100220) with the
+  dnsmasq decoder, verified offline by `scripts/logtest.sh` (`e84bcfd`). `range-idp` has no decoder yet
+  (canary rules 100230-100239 reserved). The sigma negative mutates the expectation, never the live
+  manager (`scripts/negatives.sh`, D5 P3); `SIGMA_EXPECTED` has no default (D5 P5b).
 - Wazuh active-response (`range-contain-trigger`, `<location>local</location>`)
   was designed but never written to disk. Containment currently runs via
   systemd + sudoers, not Wazuh.

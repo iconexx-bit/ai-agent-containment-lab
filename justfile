@@ -27,7 +27,8 @@ probe:
     ./scripts/verdict.sh "$RUN/probe.json" | tee "$RUN/verdict.txt"
     exit "${PIPESTATUS[0]}"
 
-# cheap pre-commit check: rule IDs present on disk (NOT authoritative)
+# cheap check of rules/*.xml: IDs unique, inside 100200-100299, XML well-formed (NOT what the manager
+# loaded — that is probe.sh sigma). Gated by `just test` via tests/test-lint-rules.sh
 lint-rules:
     ./scripts/lint-rules.sh
 
