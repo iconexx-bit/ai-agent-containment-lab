@@ -11,11 +11,17 @@ networks:
 
 services:
 
+  # stop_grace_period (all three services, tests/test-stop-grace.sh): range-idp ends in `exec sleep infinity` and
+  # agent-runner is `sleep infinity`; as PID 1 they ignore SIGTERM, so docker waited its 10 s default before
+  # SIGKILL and the killswitch's `compose stop` took ~10 s (D6 measurement, docs/evidence/d6-run2-stop.json).
+  # Both are stateless (canary accounts are created at start, the runner is read_only + tmpfs).
+
   # DNS sinkhole. Every name in the range resolves here. Queries are logged —
   # that log line is the t0 of the containment timer.
   range-dns:
     image: 4km3/dnsmasq:2.90-r3
     container_name: range-dns
+    stop_grace_period: 1s
     command:
       - "--no-resolv"
       - "--no-hosts"
@@ -47,6 +53,7 @@ services:
   range-idp:
     image: debian:stable-slim
     container_name: range-idp
+    stop_grace_period: 1s
     command: ["/bin/bash", "/opt/init/idp-init.sh"]
     environment:
       CANARY_USERS: "svc-legacy backup-admin ctf-canary"
@@ -72,6 +79,7 @@ services:
   agent-runner:
     image: curlimages/curl:8.11.0
     container_name: agent-runner
+    stop_grace_period: 1s
     entrypoint: ["sleep", "infinity"]
     networks: [agentlab0]
     dns: [10.66.0.53]
