@@ -1,0 +1,30 @@
+{
+ "schema": 1,
+ "n": 5,
+ "median_ms": 399,
+ "min_ms": 372,
+ "max_ms": 419,
+ "samples": [
+  372,
+  397,
+  416,
+  419,
+  399
+ ],
+ "lower_samples": [
+  62,
+  59,
+  79,
+  73,
+  64
+ ],
+ "stop_duration_ms": [
+  1165,
+  1169,
+  1238,
+  1220,
+  1163
+ ],
+ "missing_runs": [],
+ "definition": "t0 = first out-of-scope query (range-dns log); value = first docker kill event of the range after t0 (compose stop begins after the DROP chain is inserted, so this is an upper bound for egress closed); lower bound = t0 to call (the arm starts after it); stop_duration_ms = last die event minus the first kill"
+}

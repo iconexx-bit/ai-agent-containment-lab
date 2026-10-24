@@ -3,7 +3,7 @@
 ## Status
 2026-09-15: TOOLING FREEZE (armed 2026-08-14, scoped to v0.1.0-rc) lifted at v0.1.0 — range, killswitch and probe harness shipped.
 New tooling ideas go to ## Backlog as one-liners, not code. Exception: CI-blocking failures only.
-2026-10-24: D6 closed: two TTC/TTD measurements (n=5 each) and the time to egress-closed with committed evidence in `docs/evidence/`; delivery to the phone proven for 100202, 100203, 100204 and 100220.
+2026-10-24: D6 closed: three TTC/TTD measurements (n=5 each; run 3 after `stop_grace_period: 1s`, TTC median 1598 ms against about 10.6 s before) and the time to egress-closed with committed evidence in `docs/evidence/`; delivery to the phone proven for 100202, 100203, 100204 and 100220.
 
 ## Backlog
 - restore-canaries recipe — быстрый reset canary-состояния, непроверено, after rc
@@ -18,4 +18,4 @@ New tooling ideas go to ## Backlog as one-liners, not code. Exception: CI-blocki
   systemd + sudoers, not Wazuh.
 - `docs/postmortem-replication.md` removed as an empty draft. Reinstate only
   with a named incident and the replication steps that reproduce it.
-- compose stop takes about 10 s because `range-idp` and `agent-runner` do not exit on SIGTERM (docker's 10 s grace, then SIGKILL): the verified TTC is about 10.6 s while egress closes within about 0.5 s. A shorter `stop_grace_period` or an init process would cut the verified TTC; not done (needs its own red/green and a re-measurement)
+- ~~compose stop takes about 10 s because `range-idp` and `agent-runner` do not exit on SIGTERM (docker's 10 s grace, then SIGKILL)~~ — done 2026-10-24 (`c9eb2e6`): `stop_grace_period: 1s` on `range-dns`, `range-idp`, `agent-runner`; re-measured, TTC median 1598 ms (run 3).
