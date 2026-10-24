@@ -1,6 +1,7 @@
 # /etc/systemd/system/range-killswitch.service
-# Docker recreates the DOCKER-USER chain on daemon restart and drops our jump.
-# Without this unit the killswitch silently disarms itself.
+# Re-arms the killswitch when docker.service starts and the marker is set. Its real job is a host reboot:
+# iptables starts empty while the marker in /var/lib survives. Docker itself keeps DOCKER-USER across a
+# daemon restart (O17, Docker 29.6.1). Proven by `just verify-persistence` phase B (O24).
 [Unit]
 Description=Re-arm agent range killswitch after docker restart
 After=docker.service

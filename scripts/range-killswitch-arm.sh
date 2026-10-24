@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # range-killswitch-arm.sh — installed to /usr/local/bin, invoked by systemd
-# after docker.service starts. Docker recreates DOCKER-USER on daemon restart
-# and silently drops our jump; without this the killswitch is a placebo.
+# after docker.service starts. Its real job is a host reboot: iptables starts
+# empty while the marker in /var/lib survives, so without this unit an armed
+# killswitch silently disarms itself. Docker itself keeps DOCKER-USER across a
+# daemon restart (O17); `just verify-persistence` phase B proves the re-arm (O24).
 #
 # Re-arms ONLY if a marker file exists, so a normal reboot does not blackhole
 # the range when the operator never armed it.

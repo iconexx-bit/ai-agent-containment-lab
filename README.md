@@ -21,7 +21,7 @@ Containment is asserted by machine-checkable evidence, not by prompt text.
 
 Without a Wazuh manager the `sigma` check fails by design; to run without one, set `VERDICT_SKIP="sigma"` in `range.env` — it is reported as `PROBE PASS (skipped: sigma)`, never as a plain PASS.
 
-`just ready` is the full gate (preflight, range, live negatives 5/5, killswitch arm/verify/off). It temporarily recreates the range network **without** `--internal` — run it only on a dedicated host. It never restarts the Docker daemon. Whether the killswitch survives `systemctl restart docker` is proven separately by `just verify-persistence`: it restarts the daemon twice (every container on the host stops), needs a terminal, a typed confirmation, a stopped `hc-ping.timer` and the sudo password, and is part of no gate.
+`just ready` is the full gate (preflight, range, live negatives 5/5, killswitch arm/verify/off). It temporarily recreates the range network **without** `--internal` — run it only on a dedicated host. It never restarts the Docker daemon. Whether the killswitch survives `systemctl restart docker` is proven separately by `just verify-persistence`: it restarts the daemon twice (every container on the host stops), needs a terminal, a typed confirmation, a stopped `hc-ping.timer` and the sudo password, and is part of no gate. Phase A records whether Docker itself keeps the jump (2026-10-24, Docker 29.6.1: it does); phase B removes the killswitch with the marker set, the iptables state after a host reboot, and passes only if the systemd unit re-arms it.
 
 Containment time (TTC), three scripted measurements of `just measure-ttc 5` on 2026-10-24 (run 1 at 02:15 on `02c178d`, run 2 at 03:46, same host; run 3 at 05:14 on `c9eb2e6`, after the `stop_grace_period: 1s` fix described below); all 15 cycles PASS against the 60 s threshold. Runs 1 and 2 are the state before the fix and are kept as the before; run 3 is the current figure. Evidence: [`d6-run1-ttc.json`](docs/evidence/d6-run1-ttc.json), [`d6-run2-ttc.json`](docs/evidence/d6-run2-ttc.json), [`d6-run3-ttc.json`](docs/evidence/d6-run3-ttc.json).
 
@@ -75,4 +75,5 @@ Reproduce containment with `just range-up && just probe && just killswitch`. To 
 > The published TTC figures do not depend on Wazuh (the TTD figures do): the timer
 > reads the first out-of-scope DNS query from the `dnsmasq` container log, and
 > the killswitch is armed by `scripts/killswitch.sh` (iptables, no Wazuh); `scripts/range-killswitch-arm.sh`
-> only re-arms it via systemd after a Docker restart, and only if the marker is set.
+> re-arms it via systemd when Docker starts and the marker is set — what matters after a host reboot, when
+> iptables starts empty (Docker keeps `DOCKER-USER` across a daemon restart).

@@ -12,8 +12,11 @@
 #   phase A (O17)  marker ABSENT, jump armed by hand: does Docker itself keep the DOCKER-USER rules?
 #                  With no marker range-killswitch.service does nothing, so the answer is Docker's alone.
 #                  Reported as data (docker-preserves-jump=yes|no), never as pass/fail.
-#   phase B        marker present, as `just killswitch` sets it: the jump must be back within
-#                  PERSIST_WAIT_ARM checks. This is the assertion.
+#   phase B (O24)  marker present, killswitch REMOVED (no jump, no chain): the iptables state after a host
+#                  reboot. Only range-killswitch.service can bring the jump back within PERSIST_WAIT_ARM
+#                  checks. This is the assertion. (Arming before the restart made it vacuous: Docker keeps
+#                  DOCKER-USER, O17, so the jump survived whatever the unit did — runbook rule 71.)
+# Every DOCKER-USER snapshot must be an iptables listing; anything else (sudo refused) is exit 3, not evidence.
 # The wait tunables are iteration counts of 1 s: PERSIST_WAIT_DOCKER (90), PERSIST_WAIT_ARM (30),
 # PERSIST_SETTLE (5, seconds before phase A looks at the chain).
 #   exit 0 PASS   1 persistence FAIL   2 refused before anything was changed   3 environment error mid-run
@@ -76,6 +79,12 @@ trap cleanup EXIT
 trap 'final=130; exit 130' INT TERM HUP
 
 die() { echo "ERROR: $*" >&2; final=3; exit 3; }
+snap() { # file — DOCKER-USER listing; an error text is not evidence (runbook rule 21)
+  local first=""
+  sudo -n iptables -S DOCKER-USER >"$1" 2>&1 || die "cannot read DOCKER-USER (see $1)"
+  IFS= read -r first <"$1" || true
+  [[ $first == "-N DOCKER-USER" ]] || die "DOCKER-USER snapshot is not an iptables listing (see $1)"
+}
 restart_docker() { # the single call site in the lab
   sudo systemctl restart docker
 }
@@ -93,20 +102,21 @@ echo "docker $ver"
 # ---- phase A: Docker alone (O17) ---------------------------------------------------------------------
 echo "== phase A (O17): marker absent — does Docker itself keep the DOCKER-USER jump?"
 "$KS" arm >"$OUT/a.arm.txt" 2>&1 || die "phase A: killswitch arm failed (see $OUT/a.arm.txt)"
-sudo -n iptables -S DOCKER-USER >"$OUT/a.before.txt" 2>&1
+snap "$OUT/a.before.txt"
 restart_docker || die "phase A: the restart command failed"
 wait_docker || die "phase A: docker did not come back within ${WAIT_DOCKER}s"
 sleep "$SETTLE"
-sudo -n iptables -S DOCKER-USER >"$OUT/a.after.txt" 2>&1
+snap "$OUT/a.after.txt"
 if "$KS" verify >/dev/null 2>&1; then preserves=yes; else preserves=no; fi
 echo "docker-preserves-jump=$preserves"
 "$KS" off >/dev/null 2>&1 || die "phase A: killswitch off failed"
 
-# ---- phase B: the assertion --------------------------------------------------------------------------
-echo "== phase B: marker present (as 'just killswitch' sets it) — the jump must come back"
+# ---- phase B: the assertion (O24) --------------------------------------------------------------------
+echo "== phase B (O24): marker present, killswitch removed (the state after a reboot) — the unit must re-arm it"
 sudo mkdir -p "$(dirname "$MARKER")" && sudo touch "$MARKER" || die "phase B: cannot create the marker"
-"$KS" arm >"$OUT/b.arm.txt" 2>&1 || die "phase B: killswitch arm failed (see $OUT/b.arm.txt)"
-sudo -n iptables -S DOCKER-USER >"$OUT/b.before.txt" 2>&1
+st=$("$KS" status 2>&1); st=${st%%$'\n'*}
+[[ $st == disarmed ]] || die "phase B: the killswitch is '$st' before the restart — not the lost state"
+snap "$OUT/b.before.txt"
 restart_docker || die "phase B: the restart command failed"
 wait_docker || die "phase B: docker did not come back within ${WAIT_DOCKER}s"
 armed_at=0
@@ -114,14 +124,14 @@ for i in $(seq 1 "$WAIT_ARM"); do
   if "$KS" verify >/dev/null 2>&1; then armed_at=$i; break; fi
   sleep 1
 done
-sudo -n iptables -S DOCKER-USER >"$OUT/b.after.txt" 2>&1
+snap "$OUT/b.after.txt"
 
 # ---- verdict -----------------------------------------------------------------------------------------
 if ((armed_at > 0)); then
-  msg="PERSISTENCE PASS (docker $ver; docker-preserves-jump=$preserves; killswitch armed after ~$((armed_at - 1))s)"
+  msg="PERSISTENCE PASS (docker $ver; docker-preserves-jump=$preserves; unit re-armed the removed killswitch after ~$((armed_at - 1))s)"
   final=0
 else
-  msg="PERSISTENCE FAIL (docker $ver; docker-preserves-jump=$preserves; killswitch NOT armed within ${WAIT_ARM}s of the restart)"
+  msg="PERSISTENCE FAIL (docker $ver; docker-preserves-jump=$preserves; the unit did NOT re-arm the removed killswitch within ${WAIT_ARM}s)"
   final=1
 fi
 { echo "docker $ver"; echo "docker-preserves-jump=$preserves"; echo "$msg"; } >"$OUT/result.txt"
