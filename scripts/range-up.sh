@@ -12,7 +12,7 @@ load_range_env "$ROOT" strict || exit 2
 
 RANGE_NET="${RANGE_NET:-agentlab0}"
 RANGE_CIDR="${RANGE_CIDR:-10.66.0.0/16}"
-COMPOSE_FILE="${COMPOSE_FILE:-compose.range.yml}"
+COMPOSE_FILE="${COMPOSE_FILE:-range/compose.yml}"
 RANGE_IP_RANGE="${RANGE_IP_RANGE:-10.66.1.0/24}"
 
 # one timestamp per run — NOT $(date) inside a make variable, which re-evaluates

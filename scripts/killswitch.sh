@@ -17,7 +17,7 @@ load_range_env "$ROOT" strict || exit 2
 
 RANGE_CIDR="${RANGE_CIDR:-10.66.0.0/16}"
 KILL_CHAIN="${KILL_CHAIN:-RANGE-KILL}"
-COMPOSE_FILE="${COMPOSE_FILE:-compose.range.yml}"
+COMPOSE_FILE="${COMPOSE_FILE:-range/compose.yml}"
 ART_DIR="${ART_DIR:-$ROOT/artifacts/manual}"
 
 IPT="sudo -n iptables"

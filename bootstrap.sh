@@ -33,7 +33,7 @@ fi
 
 # 3. dependencies -------------------------------------------------------------
 missing=""
-for b in docker jq dig iptables just python3; do
+for b in docker jq dig iptables just python3 xmllint; do
   command -v "$b" >/dev/null 2>&1 || missing="$missing $b"
 done
 if [[ -n "$missing" ]]; then

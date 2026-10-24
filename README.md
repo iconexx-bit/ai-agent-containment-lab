@@ -39,9 +39,10 @@ Reproduce containment with `just range-up && just probe && just killswitch`. To 
 > manager (same image and `ossec.conf` as live, no network) replays real and synthetic fixtures
 > against frozen per-line expectations. Live install and end-to-end push are pending.
 > Known blind spot: IP-literal egress leaves no DNS trace and is not detected.
-> Fixture rule: every violation rule has … which rule fired.
+> Fixture rule: every violation rule has a synthetic line with a unique source IP on which it is the
+> final match — otherwise the correlation rule `100220` masks which rule fired.
 >
 > The published TTC figures do not depend on Wazuh: the timer
 > reads the first out-of-scope DNS query from the `dnsmasq` container log, and
-> the killswitch is armed by `scripts/killswitch.sh` (iptables, no Wazuh); …
+> the killswitch is armed by `scripts/killswitch.sh` (iptables, no Wazuh); `scripts/range-killswitch-arm.sh`
 > only re-arms it via systemd after a Docker restart, and only if the marker is set.
