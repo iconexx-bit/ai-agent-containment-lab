@@ -1,9 +1,10 @@
 # /etc/sudoers.d/range-lab   (install with: visudo -c -f, then chmod 0440)
 # Minimal NOPASSWD set. Without this, non-interactive runs of ready.sh hang
 # forever on a password prompt at 23:40 on a Friday.
+# `systemctl restart docker` is deliberately NOT here (O14 C): scripts/verify-persistence.sh is the only
+# restarter, and the sudo password prompt is part of its confirmation.
 Cmnd_Alias RANGE_IPT = /usr/sbin/iptables, /sbin/iptables
-Cmnd_Alias RANGE_SYS = /usr/bin/systemctl restart docker, \
-                       /usr/bin/systemctl start range-killswitch, \
+Cmnd_Alias RANGE_SYS = /usr/bin/systemctl start range-killswitch, \
                        /usr/bin/systemctl status range-killswitch
 Cmnd_Alias RANGE_FS  = /usr/bin/mkdir -p /var/lib/range-lab, \
                        /usr/bin/touch /var/lib/range-lab/killswitch.armed, \

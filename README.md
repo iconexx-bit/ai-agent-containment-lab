@@ -21,7 +21,7 @@ Containment is asserted by machine-checkable evidence, not by prompt text.
 
 Without a Wazuh manager the `sigma` check fails by design; to run without one, set `VERDICT_SKIP="sigma"` in `range.env` — it is reported as `PROBE PASS (skipped: sigma)`, never as a plain PASS.
 
-`just ready` is the full gate (preflight, range, live negatives 5/5, killswitch, Docker restart). It temporarily recreates the range network **without** `--internal` and restarts the Docker daemon, which stops every container on the host — run it only on a dedicated host.
+`just ready` is the full gate (preflight, range, live negatives 5/5, killswitch arm/verify/off). It temporarily recreates the range network **without** `--internal` — run it only on a dedicated host. It never restarts the Docker daemon. Whether the killswitch survives `systemctl restart docker` is proven separately by `just verify-persistence`: it restarts the daemon twice (every container on the host stops), needs a terminal, a typed confirmation, a stopped `hc-ping.timer` and the sudo password, and is part of no gate.
 
 Containment time (TTC): median **21.5 s** across 8 operator-invoked runs (11.6–41.2 s); all PASS against the 60 s threshold.
 

@@ -5,9 +5,12 @@
 #   1. preflight clean
 #   2. range comes up and probes green
 #   3. all 5 controls proven falsifiable (negatives 5/5)
-#   4. killswitch arms
-#   5. killswitch SURVIVES `systemctl restart docker`
-#   6. range comes back up green afterwards
+#   4. killswitch arms and verifies, then disarms
+#   5. range goes down and comes back up green
+#
+# It never restarts the Docker daemon: that stops every container on the host, not only the range.
+# Whether the killswitch survives a daemon restart is a separate, rare, confirmed act:
+# `just verify-persistence` (scripts/verify-persistence.sh) — it is not part of this gate.
 #
 # Anything less is theatre.
 set -uo pipefail
@@ -39,8 +42,7 @@ run "preflight"                 ./scripts/preflight.sh
 run "range-up + probe"          ./scripts/range-up.sh
 run "negatives 5/5"             ./scripts/negatives.sh
 run "killswitch arm"            bash -c 'sudo mkdir -p /var/lib/range-lab && sudo touch /var/lib/range-lab/killswitch.armed && ./scripts/killswitch.sh arm'
-run "docker daemon restart"     bash -c 'sudo systemctl restart docker && sleep 8'
-run "killswitch survived"       ./scripts/killswitch.sh verify
+run "killswitch verify"         ./scripts/killswitch.sh verify
 run "killswitch off"            bash -c 'sudo rm -f /var/lib/range-lab/killswitch.armed && ./scripts/killswitch.sh off'
 run "range-down"                ./scripts/range-down.sh
 run "range-up again (clean)"    ./scripts/range-up.sh

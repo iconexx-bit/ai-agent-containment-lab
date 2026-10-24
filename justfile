@@ -59,7 +59,8 @@ test:
     echo "ran $n/${#ts[@]} tests, rc=$rc"
     exit "$rc"
 
-# full friday gate: preflight -> up -> negatives -> docker restart -> killswitch
+# full friday gate: preflight -> up -> live negatives -> killswitch arm/verify/off -> down -> up.
+# Never restarts the Docker daemon; that is `just verify-persistence`.
 ready:
     ./scripts/ready.sh
 
@@ -82,6 +83,11 @@ killswitch-off:
 killswitch-status:
     ./scripts/killswitch.sh status
 
+# restart the Docker daemon TWICE and prove the killswitch survives (O14 C / O17). Stops every container on
+# the host: typed confirmation, hc-ping.timer stopped (rule 38), range down. Not part of `just ready`.
+verify-persistence:
+    ./scripts/verify-persistence.sh
+
 # --- negative tests (individual) -------------------------------------------
 
 break-egress:
@@ -97,9 +103,6 @@ break-canaries:
     source scripts/lib/env.sh || exit 2
     load_range_env "$PWD" strict || exit 2
     docker exec "$CANARY_CONTAINER" userdel ctf-canary
-
-break-docker:
-    sudo systemctl restart docker
 
 # --- artefacts --------------------------------------------------------------
 
