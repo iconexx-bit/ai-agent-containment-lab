@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "n_requested": 5,
+  "n_ok": 5,
+  "complete": true,
+  "name": "canary.tripwire-range.invalid",
+  "threshold_ms": 60000,
+  "pass": 5,
+  "ttc_ms": {
+    "min": 10944,
+    "median": 10962,
+    "max": 11057,
+    "samples": [
+      11057,
+      10944,
+      10955,
+      10962,
+      10973
+    ]
+  },
+  "phases": {
+    "t0_to_call_ms": {
+      "min": 126,
+      "median": 153,
+      "max": 193,
+      "samples": [
+        193,
+        153,
+        144,
+        173,
+        126
+      ]
+    },
+    "call_to_armed_ms": {
+      "min": 10789,
+      "median": 10811,
+      "max": 10864,
+      "samples": [
+        10864,
+        10791,
+        10811,
+        10789,
+        10847
+      ]
+    }
+  },
+  "errors": [],
+  "definition": "TTC = first out-of-scope query of the run (range-dns log) -> killswitch armed and verified; phases: t0->call (timer invoked) and call->armed (arm incl. compose stop, then verify); n counts completed cycles only"
+}

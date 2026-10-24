@@ -23,33 +23,53 @@ Without a Wazuh manager the `sigma` check fails by design; to run without one, s
 
 `just ready` is the full gate (preflight, range, live negatives 5/5, killswitch arm/verify/off). It temporarily recreates the range network **without** `--internal` — run it only on a dedicated host. It never restarts the Docker daemon. Whether the killswitch survives `systemctl restart docker` is proven separately by `just verify-persistence`: it restarts the daemon twice (every container on the host stops), needs a terminal, a typed confirmation, a stopped `hc-ping.timer` and the sudo password, and is part of no gate.
 
-Containment time (TTC): median **21.5 s** across 8 operator-invoked runs (11.6–41.2 s); all PASS against the 60 s threshold.
+Containment time (TTC), two scripted measurements of `just measure-ttc 5` on 2026-10-24 (run 1 at 02:15 on `02c178d`, run 2 at 03:46, same host); all 10 cycles PASS against the 60 s threshold. Evidence: [`d6-run1-ttc.json`](docs/evidence/d6-run1-ttc.json), [`d6-run2-ttc.json`](docs/evidence/d6-run2-ttc.json).
 
-Measured by `scripts/containment-timer.sh` from the agent's first out-of-scope DNS query to the killswitch armed and verified (`killswitch.sh verify`). Runs before 2026-10-14 took the *last* tripwire query as t0 — fixed; re-measurement pending. Artifact of one run (`20260817T055317Z`, 1 of 8) — [`docs/containment-verdict.json`](docs/containment-verdict.json):
+- Run 1: TTC median **10962 ms** (min 10944, max 11057) across 5 scripted runs.
+- Run 1 phases: t0 to call median 153 ms, call to armed median 10811 ms.
+- Run 2: TTC median **10629 ms** (min 10597, max 10675) across 5 scripted runs.
+- Run 2 phases: t0 to call median 72 ms, call to armed median 10555 ms.
+
+Definition: t0 is the agent's first out-of-scope DNS query of the run (`range-dns` log), t1 is the killswitch armed and verified (`killswitch.sh verify`). The loop calls the timer right after the query, so t0 to call is the floor of a scripted response, not a human- or SIEM-driven one. Call to armed includes the `compose stop` of the range and the verify. n=5 per run on one host, idle VM: a distribution, not a guarantee under load. The earlier figure (median 21.5 s across 8 operator-invoked runs, 11.6-41.2 s) took the *last* tripwire query as t0 and is superseded.
+
+Where the time goes (run 2, observed with `docker events`, evidence: [`d6-run2-stop.json`](docs/evidence/d6-run2-stop.json)): the DROP chain is inserted before `compose stop`, so the first SIGTERM that docker sends to a range container is an upper bound for the moment egress closed. Run 2: egress closed no later than median **425 ms** (min 391, max 488) after t0; the stop itself took median 10167 ms. In every cycle `range-idp` and `agent-runner` were still running when docker's 10 s grace period ended and received SIGKILL; `range-dns` exited on SIGTERM. The exact moment of the chain insertion is not measured (it lies between t0 to call and the first SIGTERM); polling `iptables` for it was rejected because it could make the arm's own iptables calls fail on the xtables lock.
+
+Detection time (TTD) for the same cycles: the alert `timestamp` in `alerts.json` minus t0, a lower bound (t0 is the log-receive time; same host clock), all by rule `100202`. It is collected by an operator tool outside the repo (lab code may not read the live SIEM), shown by `verdict.sh` as data and never judged. Evidence: [`d6-run1-ttd.json`](docs/evidence/d6-run1-ttd.json), [`d6-run2-ttd.json`](docs/evidence/d6-run2-ttd.json).
+
+- Run 1: TTD median **1348 ms** (min 435, max 1760) across 5 runs.
+- Run 2: TTD median **956 ms** (min 850, max 996) across 5 runs.
+
+Artifact of one run (`20261024T061510Z`, cycle 1 of run 1) — [`docs/containment-verdict.json`](docs/containment-verdict.json):
 
 ```json
 {
-  "containment_ms": 19650,
+  "containment_ms": 11057,
   "threshold_ms": 60000,
-  "first_attempt_log": "2026-08-17T05:53:54.047527000Z dnsmasq[1]: query[A] canary.tripwire-range.invalid from 10.66.0.3",
-  "verdict": "PASS"
+  "first_attempt_log": "2026-10-24T06:15:20.770796000Z dnsmasq[1]: query[A] canary.tripwire-range.invalid from 10.66.1.2",
+  "verdict": "PASS",
+  "t0_epoch_ms": 1792822520770,
+  "phases": {
+    "t0_to_call_ms": 193,
+    "call_to_armed_ms": 10864
+  }
 }
 ```
 
-Reproduce containment with `just range-up && just probe && just killswitch`. To measure TTC, trigger an out-of-scope query from `agent-runner`, then run `scripts/containment-timer.sh` — it arms the killswitch itself (non-persistent; only `just killswitch` sets the re-arm marker).
+Reproduce containment with `just range-up && just probe && just killswitch`. To measure TTC, trigger an out-of-scope query from `agent-runner`, then run `scripts/containment-timer.sh` — it arms the killswitch itself (non-persistent; only `just killswitch` sets the re-arm marker). For the distribution run `just measure-ttc 5` (N 1..50): every cycle starts from a range that is down and tears it down again; evidence lands in `artifacts/measure-<UTC>/`.
 
 > **Detection pack v1** (rules `100200–100206`, `100220`; decoder for dnsmasq via journald) lives in
 > `rules/` and `decoders/` and is verified offline by `scripts/logtest.sh`: an ephemeral Wazuh
 > manager (same image and `ossec.conf` as live, no network) replays real and synthetic fixtures
 > against frozen per-line expectations; deleting a rule from the pack fails the run (mutant run
 > 2026-10-19: rule `100203` removed → 3 of 4 fixtures fail). Installed in the
-> author's live Wazuh on 2026-10-16; end-to-end delivery is proven for `100202` (tripwire, level 12 →
-> phone push), while `100203`, `100204` and `100220` share that path but are not yet proven one by one.
+> author's live Wazuh on 2026-10-16; end-to-end delivery to the phone is proven one by one for `100202`, `100203`, `100204` and `100220`
+> (tripwire L12, cloud metadata name L12, plain out-of-scope L10, correlation L15; 2026-10-24: alert in `alerts.json` and one push per rule,
+> confirmed by the operator on the phone).
 > Known blind spot: IP-literal egress leaves no DNS trace and is not detected.
 > Fixture rule: every violation rule has a synthetic line with a unique source IP on which it is the
 > final match — otherwise the correlation rule `100220` masks which rule fired.
 >
-> The published TTC figures do not depend on Wazuh: the timer
+> The published TTC figures do not depend on Wazuh (the TTD figures do): the timer
 > reads the first out-of-scope DNS query from the `dnsmasq` container log, and
 > the killswitch is armed by `scripts/killswitch.sh` (iptables, no Wazuh); `scripts/range-killswitch-arm.sh`
 > only re-arms it via systemd after a Docker restart, and only if the marker is set.

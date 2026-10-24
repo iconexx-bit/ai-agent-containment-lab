@@ -1,0 +1,16 @@
+{
+ "schema": 1,
+ "n": 5,
+ "median_ms": 956,
+ "min_ms": 850,
+ "max_ms": 996,
+ "samples": [
+  956,
+  996,
+  966,
+  906,
+  850
+ ],
+ "missing_runs": [],
+ "definition": "alert .timestamp in alerts.json minus t0 (first out-of-scope query, range-dns log); lower bound; same host clock"
+}
