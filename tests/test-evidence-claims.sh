@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # test-evidence-claims.sh — D6 docs (runbook 10.6): the numbers the README publishes are the numbers of the
 # committed evidence, and the evidence agrees with itself.
-#   E1 docs/evidence/d6-run{1,2}-{ttc,ttd}.json and d6-run2-stop.json exist, schema 1, complete, no errors, n >= 5
+#   E1 docs/evidence/d6-run{1,2,3}-{ttc,ttd}.json and d6-run{2,3}-stop.json exist, schema 1, complete, no errors, n >= 5
 #   E2 TTC evidence per run: t0_to_call + call_to_armed == TTC for every cycle; min / median / max recomputed from
 #      the samples equal the stated ones (also for both phases)
 #   E3 TTD evidence per run: n == samples, min / median / max recomputed, no missing runs
@@ -11,8 +11,10 @@
 #   E6 README delivery claim: 100202, 100203, 100204 and 100220 proven one by one; the old "shares that path"
 #      and "not yet proven one by one" sentences are gone
 #   E7 docs/containment-verdict.json is the README's JSON block (jq -S) and its phases add up
-#   E8 stop evidence (run 2): per cycle t0_to_call <= first SIGTERM <= TTC, the lower bound IS the TTC phase of
+#   E8 stop evidence (runs 2 and 3): per cycle t0_to_call <= first SIGTERM <= TTC, the lower bound IS the TTC phase of
 #      that cycle, min / median / max recomputed, durations present; the README states it
+#   E9 the stop_grace_period fix is documented: README names `stop_grace_period: 1s`, its commit `c9eb2e6` and the PID 1
+#      cause; the CLAUDE.md backlog item is struck through and points at the commit
 # Every check is proven on a mutated copy first (rule 54): a check that cannot fail is not a check.
 # Hermetic: reads tracked files only.   exit 0 pass / 1 assertion / 2 harness
 set -uo pipefail
@@ -22,7 +24,8 @@ T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 fail=0; no() { echo "FAIL: $*"; fail=1; }
 
 EV=docs/evidence
-FILES=(README.md docs/containment-verdict.json "$EV/d6-run1-ttc.json" "$EV/d6-run1-ttd.json" "$EV/d6-run2-ttc.json" "$EV/d6-run2-ttd.json" "$EV/d6-run2-stop.json")
+FILES=(README.md CLAUDE.md docs/containment-verdict.json "$EV/d6-run1-ttc.json" "$EV/d6-run1-ttd.json" "$EV/d6-run2-ttc.json" "$EV/d6-run2-ttd.json" "$EV/d6-run2-stop.json"
+       "$EV/d6-run3-ttc.json" "$EV/d6-run3-ttd.json" "$EV/d6-run3-stop.json")
 
 # README with blockquote markers and line breaks flattened: phrases may wrap across lines
 flat() { sed 's/^> \{0,1\}//' "$1" | tr '\n' ' ' | tr -s ' '; }
@@ -34,9 +37,9 @@ chk() {
   md="$r/docs/containment-verdict.json"
   e() { echo "$1"; bad=1; }
   for f in "${FILES[@]}"; do [[ -f "$r/$f" ]] || { e "E1 missing $f"; return 1; }; done
-  for f in "${FILES[@]:1}"; do jq -e . "$r/$f" >/dev/null 2>&1 || { e "E1 not valid JSON: $f"; return 1; }; done
+  for f in "${FILES[@]:2}"; do jq -e . "$r/$f" >/dev/null 2>&1 || { e "E1 not valid JSON: $f"; return 1; }; done
   rf=$(flat "$r/README.md")
-  for n in 1 2; do
+  for n in 1 2 3; do
     local ttc="$r/$EV/d6-run$n-ttc.json" ttd="$r/$EV/d6-run$n-ttd.json"
     jq -e '.schema == 1 and .complete == true and (.errors | length) == 0 and .n_ok == .n_requested and .n_ok >= 5
            and .pass == .n_ok and (.ttc_ms.samples | length) == .n_ok
@@ -77,19 +80,27 @@ chk() {
   jq -e '.phases.t0_to_call_ms + .phases.call_to_armed_ms == .containment_ms and (.t0_epoch_ms | type) == "number"' \
      "$md" >/dev/null 2>&1 || e "E7 containment-verdict.json: phases do not add up to containment_ms"
   # E8
-  local st="$r/$EV/d6-run2-stop.json" t2="$r/$EV/d6-run2-ttc.json"
-  jq -e "$MEDF"'
-     .schema == 1 and .n >= 5 and (.missing_runs | length) == 0
-     and (.samples | length) == .n and (.lower_samples | length) == .n and (.stop_duration_ms | length) == .n
-     and .min_ms == (.samples | min) and .max_ms == (.samples | max) and .median_ms == (.samples | med)' \
-     "$st" >/dev/null 2>&1 || e "E8 stop evidence: schema, n, samples, min/median/max"
-  jq -e --slurpfile t "$t2" '
-     . as $s | [range(0; .n)] | all(. as $i
-       | $s.lower_samples[$i] == $t[0].phases.t0_to_call_ms.samples[$i]
-         and $s.samples[$i] >= $s.lower_samples[$i] and $s.samples[$i] <= $t[0].ttc_ms.samples[$i])' \
-     "$st" >/dev/null 2>&1 || e "E8 stop evidence does not fit the run 2 TTC evidence (lower = t0->call, lower <= first SIGTERM <= TTC)"
-  ps=$(jq -r '"Run 2: egress closed no later than median **\(.median_ms) ms** (min \(.min_ms), max \(.max_ms)) after t0; the stop itself took median \(.stop_duration_ms | sort | .[(length - 1) / 2 | floor]) ms"' "$st" 2>/dev/null)
-  [[ -n $ps && $rf == *"$ps"* ]] || e "E8 README does not state the stop evidence: $ps"
+  for n in 2 3; do
+    local st="$r/$EV/d6-run$n-stop.json" t2="$r/$EV/d6-run$n-ttc.json"
+    jq -e "$MEDF"'
+       .schema == 1 and .n >= 5 and (.missing_runs | length) == 0
+       and (.samples | length) == .n and (.lower_samples | length) == .n and (.stop_duration_ms | length) == .n
+       and .min_ms == (.samples | min) and .max_ms == (.samples | max) and .median_ms == (.samples | med)' \
+       "$st" >/dev/null 2>&1 || e "E8 run $n stop evidence: schema, n, samples, min/median/max"
+    jq -e --slurpfile t "$t2" '
+       . as $s | [range(0; .n)] | all(. as $i
+         | $s.lower_samples[$i] == $t[0].phases.t0_to_call_ms.samples[$i]
+           and $s.samples[$i] >= $s.lower_samples[$i] and $s.samples[$i] <= $t[0].ttc_ms.samples[$i])' \
+       "$st" >/dev/null 2>&1 || e "E8 run $n stop evidence does not fit the run $n TTC evidence (lower = t0->call, lower <= first SIGTERM <= TTC)"
+    ps=$(jq -r --arg n "$n" '"Run \($n): egress closed no later than median **\(.median_ms) ms** (min \(.min_ms), max \(.max_ms)) after t0; the stop itself took median \(.stop_duration_ms | sort | .[(length - 1) / 2 | floor]) ms"' "$st" 2>/dev/null)
+    [[ -n $ps && $rf == *"$ps"* ]] || e "E8 README does not state the stop evidence of run $n: $ps"
+  done
+  # E9
+  [[ $rf == *'`stop_grace_period: 1s`'* ]] || e "E9 README does not name the stop_grace_period: 1s fix"
+  [[ $rf == *'`c9eb2e6`'* ]]               || e "E9 README does not name the fix commit c9eb2e6"
+  [[ $rf == *"PID 1"* ]]                   || e "E9 README does not give the PID 1 cause"
+  grep -q '^- ~~compose stop takes about 10 s' "$r/CLAUDE.md" && grep -q 'c9eb2e6' "$r/CLAUDE.md" \
+    || e "E9 CLAUDE.md backlog item is not struck through with the fix commit"
   return $bad
 }
 
@@ -125,10 +136,24 @@ mk; rm "$T/c/$EV/d6-run2-ttd.json";                                             
 mk; jqe '.samples[1] += 100' $EV/d6-run2-stop.json;                                                         c "stop sample edited" E8
 mk; jqe '.lower_samples[1] += 1' $EV/d6-run2-stop.json;                                                     c "stop lower bound detached from the TTC phase" E8
 mk; jqe '.samples[2] = 99999' $EV/d6-run2-stop.json;                                                        c "first SIGTERM after the TTC" E8
-mk; sed -i 's/the stop itself took median [0-9]* ms/the stop itself took median 1 ms/' "$R";                c "README stop duration edited" E8
+mk; sed -i 's/Run 2: egress closed no later than median \*\*[0-9]* ms/Run 2: egress closed no later than median **1 ms/' "$R"; c "README run 2 stop median edited" E8
+mk; sed -i 's/the stop itself took median 10167 ms/the stop itself took median 1 ms/' "$R";                  c "README run 2 stop duration edited" E8
+mk; sed -i 's/Run 3: TTC median \*\*[0-9]* ms/Run 3: TTC median **1 ms/' "$R";                              c "README run 3 TTC edited" E4
+mk; sed -i 's/Run 3: TTD median \*\*[0-9]*/Run 3: TTD median **1/' "$R";                                    c "README run 3 TTD edited" E4
+mk; sed -i 's/Run 3 phases: t0 to call median [0-9]* ms/Run 3 phases: t0 to call median 1 ms/' "$R";        c "README run 3 phase edited" E4
+mk; sed -i 's/the stop itself took median 1169 ms/the stop itself took median 1 ms/' "$R";                  c "README run 3 stop duration edited" E8
+mk; jqe '.ttc_ms.samples[2] += 1' $EV/d6-run3-ttc.json;                                                     c "run 3 TTC sample edited" E2
+mk; jqe '.samples[0] += 1000' $EV/d6-run3-stop.json;                                                        c "run 3 stop sample edited" E8
+mk; jqe '.lower_samples[3] += 1' $EV/d6-run3-stop.json;                                                     c "run 3 stop lower bound detached" E8
+mk; jqe '.median_ms += 1' $EV/d6-run3-ttd.json;                                                             c "run 3 TTD median edited" E3
+mk; rm "$T/c/$EV/d6-run3-stop.json";                                                                        c "run 3 stop evidence missing" E1
+mk; sed -i 's/`stop_grace_period: 1s`/`stop_grace_period: 1 s`/g' "$R";                                      c "README fix name dropped" E9
+mk; sed -i 's/PID 1/the entrypoint/g' "$R";                                                                c "README cause dropped" E9
+mk; sed -i 's/^- ~~compose stop/- compose stop/' "$T/c/CLAUDE.md";                                           c "CLAUDE backlog item reopened" E9
+mk; sed -i 's/c9eb2e6/0000000/g' "$T/c/CLAUDE.md";                                                          c "CLAUDE fix commit dropped" E9
 
 out=$(chk "$ROOT"); rc=$?
 ((rc == 0)) || no "the committed README and evidence disagree:"$'\n'"$out"
 
-((fail == 0)) && echo "evidence-claims: PASS (E1-E8 on the committed files; controls ${ctl_ok}/${ctl_all} tripped their check)"
+((fail == 0)) && echo "evidence-claims: PASS (E1-E9 on the committed files; controls ${ctl_ok}/${ctl_all} tripped their check)"
 exit "$fail"
