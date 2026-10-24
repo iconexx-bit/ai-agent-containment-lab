@@ -66,6 +66,21 @@ for k in "${KEYS[@]}"; do
   fi
 done
 
+# TTD (D6b) is DATA, never a condition: an optional ttd.json next to probe.json (written by the operator's
+# collector, which reads the live SIEM — lab code may not, tests/test-no-live-writes.sh) is printed as one line.
+# It cannot change rc or the last line; anything that is not a plain schema-1 summary is named and ignored.
+# Values are checked by jq as integers 0..86400000 (one day) and only then interpolated: nothing from the file is evaluated.
+TTD_FILE="$(dirname "$FILE")/ttd.json"
+if [[ -f "$TTD_FILE" ]]; then
+  ttd=$(jq -r 'if type == "object" and .schema == 1
+                  and ([.n, .median_ms, .min_ms, .max_ms] | all(type == "number" and . >= 0 and . == floor and . <= 86400000))
+                  and .n >= 1 and .min_ms <= .median_ms and .median_ms <= .max_ms
+               then "TTD (data, not judged): n=\(.n) median \(.median_ms) ms (min \(.min_ms), max \(.max_ms))"
+               else empty end' "$TTD_FILE" 2>/dev/null) || ttd=""
+  if [[ -n $ttd ]]; then echo "$ttd"
+  else echo "TTD: ttd.json present but not a valid schema-1 summary — ignored"; fi
+fi
+
 echo
 sfx=""; ((${#skipped[@]})) && sfx=" (skipped: ${skipped[*]})"
 if [[ $fail -eq 0 ]]; then echo "PROBE PASS$sfx"; exit 0; fi

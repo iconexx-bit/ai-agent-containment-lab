@@ -29,12 +29,19 @@ if [[ -z "$line" ]]; then
 fi
 t0=$(date -d "$(echo "$line" | awk '{print $1}')" +%s%3N 2>/dev/null) || {
   echo "could not parse: $line" >&2; exit 2; }
+[[ $t0 =~ ^[0-9]+$ ]] || { echo "could not parse a timestamp from: $line" >&2; exit 2; }
 
+# Phases (D6a): t0 -> call (first attempt until this script invokes the arm: log scraping + invocation
+# latency; operator reaction time when run by hand) and call -> armed (the arm incl. `compose stop` of the
+# range, then verify). containment_ms is their sum and keeps its definition: t1 is taken AFTER verify.
+tc=$(date +%s%3N)
 "$ROOT/scripts/killswitch.sh" arm    >/dev/null 2>&1
 "$ROOT/scripts/killswitch.sh" verify >/dev/null 2>&1 || { echo "killswitch did not arm" >&2; exit 1; }
 t1=$(date +%s%3N)
 
 jq -n --argjson ms "$((t1 - t0))" --arg t0 "$line" --argjson thr 60000 \
+  --argjson a "$((tc - t0))" --argjson b "$((t1 - tc))" --argjson e0 "$t0" \
   '{containment_ms:$ms, threshold_ms:$thr, first_attempt_log:$t0,
-    verdict:(if $ms < $thr then "PASS" else "FAIL" end)}' \
+    verdict:(if $ms < $thr then "PASS" else "FAIL" end),
+    t0_epoch_ms:$e0, phases:{t0_to_call_ms:$a, call_to_armed_ms:$b}}' \
   | tee "$RUN/containment.json"

@@ -44,6 +44,10 @@ schema-check:
     jsonschema.validate(d,s); print("schema ok")
     PY
 
+# D6a: N range cycles (default 5) -> TTC min/median/max with n; needs sudo (killswitch); each query reaches the live SIEM
+measure-ttc N="5":
+    ./scripts/measure-ttc.sh {{N}}
+
 # THE gate. 5/5 or do not record.
 verify-negatives:
     ./scripts/negatives.sh
