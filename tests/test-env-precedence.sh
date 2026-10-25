@@ -136,10 +136,10 @@ out=$("${CLEAN[@]}" VERDICT_SKIP="" bash "$d/scripts/verdict.sh" "$d/ok.json" 2>
 d=$(tree e10 $'SIGMA_EXPECTED=8\nWAZUH_HOST=127.0.0.1\nWAZUH_USER=u\nWAZUH_PASS=p\nWAZUH_API_PIN=sha256//0vxCZwJEabcdefghijklmnopqrstuvwxyz0123NMe8A=\nRANGE_CIDR=10.66.0.0/16'); stubs "$d"
 sig() { jq -r '.checks[] | select(.id=="sigma") | "\(.ok) \(.detail)"' <<<"$1" 2>/dev/null; }
 out=$("${CLEAN[@]}" PATH="$d/bin:$PATH" bash "$d/scripts/probe.sh" 2>"$d/err0"); rc=$?
-[[ $rc == 0 && $(sig "$out") == "true loaded=8 expected=8 "* ]] \
+[[ $rc == 0 && $(sig "$out") == "true present=8 expected=8 "* ]] \
   || no "E10a probe without export: sigma true, expected=8 (rc=$rc sigma='$(sig "$out")')"
 out=$("${CLEAN[@]}" SIGMA_EXPECTED=9 PATH="$d/bin:$PATH" bash "$d/scripts/probe.sh" 2>"$d/err1"); rc=$?
-{ [[ $rc == 0 && $(sig "$out") == "false loaded=8 expected=9 "* ]] \
+{ [[ $rc == 0 && $(sig "$out") == "false present=8 expected=9 "* ]] \
   && grep -q 'SIGMA_EXPECTED overridden by environment' "$d/err1"; } \
   || no "E10b probe with SIGMA_EXPECTED=9 exported: sigma false, expected=9, override named (rc=$rc sigma='$(sig "$out")')"
 

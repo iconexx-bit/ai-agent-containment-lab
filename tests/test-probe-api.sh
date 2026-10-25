@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # test-probe-api.sh — D5 P5a: how probe.sh talks to the Wazuh API (runbook 10.1, rules 7 and 8).
-#   K1 control: pin set, API answers -> sigma true loaded=8 expected=8, exactly 2 API calls
+#   K1 control: pin set, API answers -> sigma true present=8 expected=8, exactly 2 API calls
 #   K2 secrets never in argv: WAZUH_PASS and the bearer token are absent from every curl argv;
 #      they arrive in a curl config (-K) with " and \ escaped
 #   K3 every API call is pinned: -k AND --pinnedpubkey "$WAZUH_API_PIN" on each call
@@ -65,8 +65,8 @@ calls() { [[ -f "$1/curl.argv" ]] || { echo 0; return; }; grep -c 'https://' "$1
 
 # K1-K3: happy path
 d=$(world k1 "$PIN" ok); run "$d"
-{ ((rc == 0)) && [[ $(sig) == "true loaded=8 expected=8 "* ]] && [[ $(calls "$d") == 2 ]]; } \
-  || no "K1 control: sigma true loaded=8 expected=8 with 2 API calls (rc=$rc sigma='$(sig)' calls=$(calls "$d"))"
+{ ((rc == 0)) && [[ $(sig) == "true present=8 expected=8 "* ]] && [[ $(calls "$d") == 2 ]]; } \
+  || no "K1 control: sigma true present=8 expected=8 with 2 API calls (rc=$rc sigma='$(sig)' calls=$(calls "$d"))"
 { ! grep -qF 'S3CR3T' "$d/curl.argv" && ! grep -qF "$TOKEN" "$d/curl.argv"; } \
   || no "K2a password or bearer token present in curl argv (world-readable /proc/<pid>/cmdline)"
 { grep -qxF 'user = "ro:p\"w\\q-S3CR3T"' "$d/curl.cfg" 2>/dev/null \

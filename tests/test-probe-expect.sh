@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # test-probe-expect.sh — D5 P5b, variant B: SIGMA_EXPECTED has no default and is validated
 # before any arithmetic (runbook 10.6 P5b; rules 21, 29).
-#   X0 control: SIGMA_EXPECTED=8 in range.env, API answers 8 -> sigma true loaded=8 expected=8, 2 API calls
+#   X0 control: SIGMA_EXPECTED=8 in range.env, API answers 8 -> sigma true present=8 expected=8, 2 API calls
 #   X1 SIGMA_EXPECTED absent (range.env and environment) -> sigma false "SIGMA_EXPECTED unset", 0 API calls
 #   X2 SIGMA_EXPECTED= (empty) in range.env -> same as X1
 #   X3 malformed value exported over range.env (default-mode override, the live-negative path):
@@ -66,8 +66,8 @@ shape() { ((rc == 0)) && [[ $(nchecks) == 5 ]]; }   # rc 0 + parseable JSON with
 
 # X0: control
 d=$(world x0 'SIGMA_EXPECTED=8'); run "$d"
-{ shape && [[ $(sig) == "true loaded=8 expected=8 "* ]] && [[ $(calls "$d") == 2 ]]; } \
-  || no "X0 control: sigma true loaded=8 expected=8, 2 API calls (rc=$rc checks=$(nchecks) sigma='$(sig)' calls=$(calls "$d"))"
+{ shape && [[ $(sig) == "true present=8 expected=8 "* ]] && [[ $(calls "$d") == 2 ]]; } \
+  || no "X0 control: sigma true present=8 expected=8, 2 API calls (rc=$rc checks=$(nchecks) sigma='$(sig)' calls=$(calls "$d"))"
 
 # X1-X2: no expectation -> no default, no API call
 for c in "x1:" "x2:SIGMA_EXPECTED="; do
