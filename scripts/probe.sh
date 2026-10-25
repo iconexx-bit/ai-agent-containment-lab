@@ -89,9 +89,12 @@ else
   add_check "tripwire" false "getent-in-range" "probe image absent"
 fi
 
-# 3. SIGMA RULES — level B (authoritative): loaded by the Wazuh manager.
-#    A rule file on disk is NOT a loaded rule. Wazuh silently drops rules with
-#    duplicate IDs or malformed XML and still reports a clean restart.
+# 3. SIGMA RULES — level B: rule FILES present, as the Wazuh API lists them.
+#    O13 (2026-10-25): GET /rules parses the rule files on disk (behind a 10 s RBAC file-list cache);
+#    a file added without a restart is listed before analysisd loads it. So this is NOT proof that
+#    analysisd loaded the pack — that is shown only by an alert end to end (D4/D6). Wazuh also drops
+#    rules with duplicate IDs or malformed XML at load time; the API listing cannot see that.
+#    The JSON key stays sigma_loaded for the schema probe.v1 contract (rename with a schema bump).
 # ---------------------------------------------------------------------------
 sigma_loaded=false
 sigma_ids=$(seq -s, "$SIGMA_ID_MIN" "$SIGMA_ID_MAX")
@@ -144,11 +147,11 @@ else
     if ((crc != 0)); then
       add_check "sigma" false "wazuh-api" "$(api_fail "$crc")"
     else
-      loaded=$(jq -r '.data.total_affected_items // 0' <<<"$resp" 2>/dev/null)
-      [[ "$loaded" =~ ^[0-9]+$ ]] || loaded=0
-      [[ "$loaded" -eq "$SIGMA_EXPECTED" ]] && sigma_loaded=true
+      present=$(jq -r '.data.total_affected_items // 0' <<<"$resp" 2>/dev/null)
+      [[ "$present" =~ ^[0-9]+$ ]] || present=0
+      [[ "$present" -eq "$SIGMA_EXPECTED" ]] && sigma_loaded=true
       add_check "sigma" "$sigma_loaded" "wazuh-api" \
-        "loaded=$loaded expected=$SIGMA_EXPECTED range=${SIGMA_ID_MIN}-${SIGMA_ID_MAX}"
+        "present=$present expected=$SIGMA_EXPECTED range=${SIGMA_ID_MIN}-${SIGMA_ID_MAX}"
     fi
   fi
 fi

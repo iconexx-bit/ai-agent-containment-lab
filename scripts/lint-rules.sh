@@ -5,7 +5,8 @@
 # reserved block, every rules/*.xml well-formed (Wazuh silently drops malformed files).
 # It does NOT check how many rules there should be (D5 P5b, variant B'):
 #   - pack composition is pinned by the reviewed fixtures: scripts/logtest.sh (*.expected + coverage);
-#   - what the live manager loaded is probe.sh's sigma check (SIGMA_EXPECTED in range.env).
+#   - the rule files the live manager's API lists are probe.sh's sigma check (SIGMA_EXPECTED in range.env;
+#     files present, not loaded-in-analysisd — O13).
 # exit 0 OK / 1 lint failure / 2 cannot check (range.env, rules dir or xmllint missing)
 set -uo pipefail
 

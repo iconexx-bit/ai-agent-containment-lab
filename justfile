@@ -28,7 +28,7 @@ probe:
     exit "${PIPESTATUS[0]}"
 
 # cheap check of rules/*.xml: IDs unique, inside 100200-100299, XML well-formed (NOT what the manager
-# loaded — that is probe.sh sigma). Gated by `just test` via tests/test-lint-rules.sh
+# has — the files its API lists are probe.sh sigma, O13). Gated by `just test` via tests/test-lint-rules.sh
 lint-rules:
     ./scripts/lint-rules.sh
 

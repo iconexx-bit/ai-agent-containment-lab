@@ -11,7 +11,7 @@ Containment is asserted by machine-checkable evidence, not by prompt text.
 |---|---|
 | Egress blocked | curl from inside the range, by IP and by name |
 | Tripwire sinkholed | resolution inside the range, not on the host |
-| Detection rules loaded (`sigma` check) | Wazuh API (pinned TLS, credentials off argv), exact count of IDs `100200–100299` against `SIGMA_EXPECTED` — no default: unset or malformed fails before any API call. Pack v1 (8 rules) is installed in the author's live Wazuh since 2026-10-16; 2026-10-19 run: `loaded=8 expected=8`. Not yet proven: that the API count reflects rules loaded by `analysisd`, not just files on disk |
+| Detection rule files present (`sigma` check) | Wazuh API (pinned TLS, credentials off argv), exact count of IDs `100200–100299` against `SIGMA_EXPECTED` — no default: unset or malformed fails before any API call. Pack v1 (8 rules) is installed in the author's live Wazuh since 2026-10-16; 2026-10-19 run: 8 of 8 (then printed as `loaded=8`, now `present=8`). The API lists rule files on disk, not what `analysisd` loaded: on an ephemeral 4.14.8 manager a rule file added without a restart was listed by `GET /rules` (after the API's 10 s file-list cache) while `analysisd` raised no alert for it until a restart (O13, 2026-10-25). That the live manager runs the pack is shown by an alert end to end (rules 100202, 100203, 100204, 100220 delivered to the phone), not by this check |
 | Canary accounts | getent per user |
 | Simulation attestation | CA certificate present in the range (PEM); its SHA-256 fingerprint is reported in `probe.json` but not yet pinned |
 
