@@ -5,7 +5,8 @@
 #   V3 a FAIL check -> result fail, verdict FAIL, rc 1      V4 VERDICT_SKIP -> result skip, named in skipped[]
 #   V5 VERDICT_JSON unwritable (missing dir, a directory) -> rc 70 and no "PROBE ..." line
 #   V6 malformed probe (rc 70) -> no VERDICT_JSON written
-#   E1 emit.sh: SARIF 2.1.0, run.properties.schema clab/v1, binding operator_declared + the ARN,
+#   E1 emit.sh: SARIF 2.1.0 with $schema = the OASIS errata01 URI (the schema's own id; the old
+#      raw.githubusercontent .../sarif-spec/master/Schemata/ path is gone since 2024-05-02), run.properties.schema clab/v1, binding operator_declared + the ARN,
 #      six rules and six results in contract order, every location = the declared ARN, sha256 of inputs
 #   E2 fail -> kind fail, level = the rule's level   E3 skip -> kind open, level none (not verified)
 #   E4 TTC is pass only if every requested cycle completed and passed (pass < n, n_ok < n, !complete -> fail)
@@ -32,6 +33,7 @@ cp "$ROOT/scripts/verdict.sh" "$tree/scripts/" && cp -r "$ROOT/scripts/lib" "$tr
 printf 'RANGE_CIDR=10.66.0.0/16\n' >"$tree/range.env"
 EMIT="$ROOT/integrations/ascc/emit.sh"
 ARN="arn:aws:ec2:us-east-1:123456789012:instance/i-0a1b2c3d4e5f67890"
+SCHEMA_URI="https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json"
 RULES='["CLAB-EGRESS-001","CLAB-TRIPWIRE-001","CLAB-SIGMA-001","CLAB-CANARY-001","CLAB-SIMCA-001","CLAB-TTC-001"]'
 
 probe() { # $1 = path, $2 = canaries ok, $3 = egress ok
@@ -96,8 +98,8 @@ ttc "$T/ttc.json"
 tsha=$(sha256sum "$T/ttc.json" | cut -d' ' -f1)
 E "$T/v-pass.json" "$T/ttc.json" "$ARN"
 ((erc == 0)) || no "E1 emit rc=$erc: $(cat "$T/emit.err")"
-jq -e --arg arn "$ARN" --arg psha "$psha" --arg tsha "$tsha" --argjson rules "$RULES" '
-    .version == "2.1.0" and (.runs | length) == 1 and .runs[0] as $r
+jq -e --arg arn "$ARN" --arg psha "$psha" --arg tsha "$tsha" --argjson rules "$RULES" --arg uri "$SCHEMA_URI" '
+    ."$schema" == $uri and .version == "2.1.0" and (.runs | length) == 1 and .runs[0] as $r
     | $r.tool.driver.name == "containment-lab"
     and $r.properties.schema == "clab/v1"
     and $r.properties.binding == {method: "operator_declared", resource_arn: $arn}
@@ -156,6 +158,8 @@ E "$T/v-pass.json" "$T/ttc.json" "$ARN"
 
 want=$(jq -c '."$defs".ruleId.enum' "$ROOT/schemas/clab.v1.json" 2>/dev/null)
 [[ $want == "$RULES" ]] || no "E8 schemas/clab.v1.json ruleId enum ($want) != emitter order ($RULES)"
+cu=$(jq -r '.properties."$schema".const' "$ROOT/schemas/clab.v1.json" 2>/dev/null)
+[[ $cu == "$SCHEMA_URI" ]] || no "E8 schemas/clab.v1.json \$schema const ($cu) != $SCHEMA_URI"
 pc=$(jq -c '.properties.checks.items.properties.id.enum' "$ROOT/schemas/probe.v1.json")
 ec=$(jq -c '[.runs[0].results[:5][].properties.control]' <<<"$a")
 [[ $pc == "$ec" ]] || no "E8 probe controls ($ec) != schemas/probe.v1.json check ids ($pc)"
