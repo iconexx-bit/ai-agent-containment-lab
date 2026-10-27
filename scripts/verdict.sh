@@ -2,6 +2,9 @@
 # verdict.sh <probe.json> — the ONLY place a PASS/FAIL decision is made.
 #   exit 0 = PASS   exit 1 = FAIL   exit 2 = usage or skip config   exit 70 = malformed input
 #   VERDICT_SKIP: ids reported as SKIP (operator) and named in the last line (scripts/lib/skip.sh)
+#   VERDICT_JSON: when set, the same judgement is also written there as JSON (schema "verdict/v1",
+#     integrations/ascc/README.md) before the last line; stdout and rc do not change. A file that
+#     cannot be written -> exit 70 and no "PROBE ..." line (a requested artefact is never dropped quietly).
 #
 # Split from probe.sh deliberately: collection and judgement are separate
 # concerns, and negatives.sh must assert on the judgement alone.
@@ -42,7 +45,7 @@ for k in "${KEYS[@]}"; do
   fi
 done
 
-fail=0; skipped=()
+fail=0; skipped=(); judged=()
 printf '%-22s %-6s %s\n' "CHECK" "RESULT" "DETAIL"
 for k in "${KEYS[@]}"; do
   v=$(jq -r --arg k "$k" '.[$k]' "$FILE")
@@ -55,13 +58,13 @@ for k in "${KEYS[@]}"; do
   fi
   if [[ "$VERDICT_SKIP_IDS" == *" ${ID[$k]} "* ]]; then
     printf '%-22s %-6s %s\n' "$k" "SKIP" "(operator: VERDICT_SKIP) NOT VERIFIED — $d"
-    skipped+=("${ID[$k]}")
+    skipped+=("${ID[$k]}"); judged+=("skip")
     continue
   fi
   if [[ "$v" == "true" ]]; then
-    printf '%-22s %-6s %s\n' "$k" "pass" "$d"
+    printf '%-22s %-6s %s\n' "$k" "pass" "$d"; judged+=("pass")
   else
-    printf '%-22s %-6s %s\n' "$k" "FAIL" "$d"
+    printf '%-22s %-6s %s\n' "$k" "FAIL" "$d"; judged+=("fail")
     fail=1
   fi
 done
@@ -79,6 +82,34 @@ if [[ -f "$TTD_FILE" ]]; then
                else empty end' "$TTD_FILE" 2>/dev/null) || ttd=""
   if [[ -n $ttd ]]; then echo "$ttd"
   else echo "TTD: ttd.json present but not a valid schema-1 summary — ignored"; fi
+fi
+
+# VERDICT_JSON: the judgement above as data, for integrations/ascc/emit.sh. Nothing is judged here:
+# results come from the loop, the probe's own fields are copied, the probe file is identified by sha256.
+if [[ -n ${VERDICT_JSON:-} ]]; then
+  [[ ! -d $VERDICT_JSON ]] || { echo "verdict: VERDICT_JSON is a directory: $VERDICT_JSON" >&2; exit 70; }
+  ids=(); for k in "${KEYS[@]}"; do ids+=("${ID[$k]}"); done
+  psha=$(sha256sum "$FILE" | cut -d' ' -f1) && [[ $psha =~ ^[0-9a-f]{64}$ ]] \
+    || { echo "verdict: cannot hash $FILE" >&2; exit 70; }
+  vtmp=$(mktemp "$(dirname -- "$VERDICT_JSON")/.verdict.XXXXXX" 2>/dev/null) \
+    || { echo "verdict: VERDICT_JSON directory not writable: $VERDICT_JSON" >&2; exit 70; }
+  if jq -n --slurpfile p "$FILE" --arg sha "$psha" --arg verdict "$( ((fail)) && echo FAIL || echo PASS)" \
+       --args '$p[0] as $p
+         | ($ARGS.positional | length / 3) as $n
+         | {schema: "verdict/v1",
+            probe: {ts: $p.ts, sha256: $sha},
+            verdict: $verdict,
+            checks: [range(0; $n) as $i
+              | ($ARGS.positional[$i]) as $id
+              | ($p.checks[] | select(.id == $id)) as $c
+              | {id: $id, key: $ARGS.positional[$n + $i], result: $ARGS.positional[2 * $n + $i],
+                 method: $c.method, detail: $c.detail}],
+            skipped: [range(0; $n) as $i | select($ARGS.positional[2 * $n + $i] == "skip") | $ARGS.positional[$i]]}' \
+       "${ids[@]}" "${KEYS[@]}" "${judged[@]}" >"$vtmp" && mv -f -- "$vtmp" "$VERDICT_JSON"; then
+    :
+  else
+    rm -f -- "$vtmp"; echo "verdict: cannot write VERDICT_JSON: $VERDICT_JSON" >&2; exit 70
+  fi
 fi
 
 echo

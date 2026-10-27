@@ -24,8 +24,21 @@ probe:
     RUN=$(cat .run-id 2>/dev/null || echo "artifacts/adhoc")
     mkdir -p "$RUN"
     ./scripts/probe.sh > "$RUN/probe.json" 2> "$RUN/probe.stderr" || exit 70
-    ./scripts/verdict.sh "$RUN/probe.json" | tee "$RUN/verdict.txt"
+    VERDICT_JSON="$RUN/verdict.json" ./scripts/verdict.sh "$RUN/probe.json" | tee "$RUN/verdict.txt"
     exit "${PIPESTATUS[0]}"
+
+# A3: the current run's judgement (verdict.json of `just probe`) + a TTC summary as SARIF clab/v1 for ASCC.
+# ARN = the EC2 instance the operator DECLARES the agent runs on (binding operator_declared, never observed).
+# Parameters are exported ($), never interpolated into the script text: the ARN is validated by emit.sh.
+emit-sarif $ARN $TTC="docs/evidence/d6-run3-ttc.json":
+    #!/usr/bin/env bash
+    set -uo pipefail
+    RUN=$(cat .run-id 2>/dev/null || echo "artifacts/adhoc")
+    [[ -f "$RUN/verdict.json" ]] || { echo "no $RUN/verdict.json: run just probe first" >&2; exit 2; }
+    ./integrations/ascc/emit.sh "$RUN/verdict.json" "$TTC" "$ARN" > "$RUN/clab.sarif.json.tmp" \
+      && mv -f "$RUN/clab.sarif.json.tmp" "$RUN/clab.sarif.json" \
+      && echo "$RUN/clab.sarif.json $(sha256sum "$RUN/clab.sarif.json" | cut -c1-12)" \
+      || { rc=$?; rm -f "$RUN/clab.sarif.json.tmp"; exit "$rc"; }
 
 # cheap check of rules/*.xml: IDs unique, inside 100200-100299, XML well-formed (NOT what the manager
 # has — the files its API lists are probe.sh sigma, O13). Gated by `just test` via tests/test-lint-rules.sh
