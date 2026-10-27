@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://range-lab.local/schemas/clab.v1.json",
+  "title": "Containment lab judgement as SARIF 2.1.0 for ASCC, contract clab/v1",
+  "description": "A profile of SARIF 2.1.0 (validate against the OASIS schema too). Producer: integrations/ascc/emit.sh. One run, one declared resource, six controls in this order. kind pass = verified, fail = violated, open = not verified (operator skip). The binding is declared by the operator, never observed.",
+  "type": "object",
+  "required": ["$schema", "version", "runs"],
+  "properties": {
+    "version": { "const": "2.1.0" },
+    "runs": {
+      "type": "array", "minItems": 1, "maxItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["tool", "properties", "results"],
+        "properties": {
+          "tool": {
+            "type": "object", "required": ["driver"],
+            "properties": {
+              "driver": {
+                "type": "object", "required": ["name", "rules"],
+                "properties": {
+                  "name": { "const": "containment-lab" },
+                  "rules": {
+                    "type": "array", "minItems": 6, "maxItems": 6,
+                    "items": {
+                      "type": "object", "required": ["id", "defaultConfiguration", "properties"],
+                      "properties": {
+                        "id": { "$ref": "#/$defs/ruleId" },
+                        "defaultConfiguration": {
+                          "type": "object", "required": ["level"],
+                          "properties": { "level": { "enum": ["error", "warning", "note"] } }
+                        },
+                        "properties": {
+                          "type": "object", "required": ["security-severity", "clab/control"],
+                          "properties": {
+                            "security-severity": { "type": "string", "pattern": "^(10\\.0|[0-9]\\.[0-9])$" },
+                            "clab/control": { "$ref": "#/$defs/control" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "properties": {
+            "type": "object",
+            "required": ["schema", "binding", "verdict", "probe", "ttc"],
+            "properties": {
+              "schema": { "const": "clab/v1" },
+              "binding": {
+                "type": "object", "additionalProperties": false,
+                "required": ["method", "resource_arn"],
+                "properties": {
+                  "method": { "const": "operator_declared" },
+                  "resource_arn": { "$ref": "#/$defs/arn" }
+                }
+              },
+              "verdict": { "enum": ["PASS", "FAIL"] },
+              "probe": {
+                "type": "object", "required": ["ts", "sha256"],
+                "properties": { "ts": { "type": "string" }, "sha256": { "$ref": "#/$defs/sha256" } }
+              },
+              "ttc": {
+                "type": "object", "required": ["sha256"],
+                "properties": { "sha256": { "$ref": "#/$defs/sha256" } }
+              }
+            }
+          },
+          "results": {
+            "type": "array", "minItems": 6, "maxItems": 6,
+            "items": {
+              "type": "object",
+              "required": ["ruleId", "kind", "level", "message", "locations", "properties"],
+              "properties": {
+                "ruleId": { "$ref": "#/$defs/ruleId" },
+                "kind": { "enum": ["pass", "fail", "open"] },
+                "level": { "enum": ["error", "warning", "note", "none"] },
+                "locations": {
+                  "type": "array", "minItems": 1, "maxItems": 1,
+                  "items": {
+                    "type": "object", "required": ["logicalLocations"],
+                    "properties": {
+                      "logicalLocations": {
+                        "type": "array", "minItems": 1, "maxItems": 1,
+                        "items": {
+                          "type": "object", "required": ["fullyQualifiedName", "kind"],
+                          "properties": {
+                            "fullyQualifiedName": { "$ref": "#/$defs/arn" },
+                            "kind": { "const": "resource" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "properties": {
+                  "type": "object", "required": ["control", "method"],
+                  "properties": { "control": { "$ref": "#/$defs/control" }, "method": { "type": "string" } }
+                }
+              },
+              "if": { "properties": { "kind": { "const": "fail" } } },
+              "then": { "properties": { "level": { "enum": ["error", "warning", "note"] } } },
+              "else": { "properties": { "level": { "const": "none" } } }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "ruleId": { "enum": ["CLAB-EGRESS-001", "CLAB-TRIPWIRE-001", "CLAB-SIGMA-001", "CLAB-CANARY-001", "CLAB-SIMCA-001", "CLAB-TTC-001"] },
+    "control": { "enum": ["egress", "tripwire", "sigma", "canaries", "sim_ca", "ttc"] },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "arn": { "type": "string", "pattern": "^arn:aws(-[a-z]+)*:ec2:[a-z]{2}(-[a-z]+)+-[0-9]:[0-9]{12}:instance/i-[0-9a-f]{8}([0-9a-f]{9})?$" }
+  }
+}
