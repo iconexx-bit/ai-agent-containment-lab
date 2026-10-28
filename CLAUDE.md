@@ -8,6 +8,8 @@ New tooling ideas go to ## Backlog as one-liners, not code. Exception: CI-blocki
 the judgement leaves the lab only as SARIF `clab/v1` (`schemas/clab.v1.json`, `integrations/ascc/emit.sh`, `verdict.sh` `VERDICT_JSON`,
 `tests/test-clab-sarif.sh`). `verdict.sh` stays the only place a probe PASS/FAIL is decided; the emitter maps, never judges.
 The ARN binding is `operator_declared`: never write that a scanner or the lab observed it. No ASCC code is imported here.
+2026-10-28: public CI (`.github/workflows/test.yml`) runs `scripts/test-all.sh`, the same script as `just test` and pre-push
+(`tests/test-ci.sh` keeps them one). A README claim stays backed by a test that now runs in public on every push.
 
 ## Backlog
 - restore-canaries recipe — быстрый reset canary-состояния, непроверено, after rc
