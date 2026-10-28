@@ -1,5 +1,7 @@
 # AI Agent Containment Lab
 
+[![tests](https://github.com/iconexx-bit/ai-agent-containment-lab/actions/workflows/test.yml/badge.svg)](https://github.com/iconexx-bit/ai-agent-containment-lab/actions/workflows/test.yml)
+
 Reproducible range for testing whether an autonomous agent stays contained.
 Containment is asserted by machine-checkable evidence, not by prompt text.
 

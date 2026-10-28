@@ -1,0 +1,34 @@
+name: tests
+
+# The lab test suite in public: the same scripts/test-all.sh that `just test` and the
+# pre-push hook run (tests/test-ci.sh keeps the three on one script). Hermetic: no live
+# services, no Docker daemon, no secrets.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+# Read-only token; nothing here writes to the repository.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false  # no step pushes; keep GITHUB_TOKEN out of .git
+
+      - name: Tools (jq, xmllint)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends jq libxml2-utils
+          jq --version
+          xmllint --version 2>&1 | head -n1
+          bash --version | head -n1
+
+      - name: Lab test suite
+        run: ./scripts/test-all.sh
