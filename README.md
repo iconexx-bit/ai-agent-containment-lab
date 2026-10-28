@@ -5,7 +5,7 @@ Containment is asserted by machine-checkable evidence, not by prompt text.
 
 **A prompt is not a security control.**
 
-[containment demo](demo/containment-demo-final.mp4)
+[containment demo](demo/containment-demo-final.mp4) — recorded in August 2026 (run `20260815T142841Z`, `containment_ms=11588` by the superseded t0 definition, before the `stop_grace_period` fix); the current figures are below.
 
 | Control | Verified by |
 |---|---|
@@ -77,3 +77,7 @@ Reproduce containment with `just range-up && just probe && just killswitch`. To 
 > the killswitch is armed by `scripts/killswitch.sh` (iptables, no Wazuh); `scripts/range-killswitch-arm.sh`
 > re-arms it via systemd when Docker starts and the marker is set — what matters after a host reboot, when
 > iptables starts empty (Docker keeps `DOCKER-USER` across a daemon restart).
+
+## Feeding ASCC
+
+The lab's judgement leaves it as SARIF `clab/v1`: `just probe` writes `verdict.json` next to `probe.json`, then `just emit-sarif <EC2 instance ARN>` writes `clab.sarif.json` (contract: [`integrations/ascc/README.md`](integrations/ascc/README.md), `schemas/clab.v1.json`). [ASCC](https://github.com/iconexx-bit/ascc) reads it as runtime evidence (since PR #20, 2026-10-27): a verified control becomes evidence on the graph node of that instance, a failed control becomes a finding on the attack chain through that node. The ARN is declared by the operator (`operator_declared`, confidence 0.5 in ASCC): this range is a local Docker range, so the binding says where the agent would run, not that the instance was tested. ASCC's fixture `leaky_data_lake_contained` carries the output of a live run on 2026-10-27: 6 of 6 controls pass, TTC median 1598 ms (run 3 evidence).
